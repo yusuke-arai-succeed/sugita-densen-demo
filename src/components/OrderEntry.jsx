@@ -117,6 +117,46 @@ function ModalSection({ title, children }) {
   );
 }
 
+// ─── インクリメンタル検索コンボボックス ───────────────────────────────────────
+function ComboInput({ value, onChange, onSelect, options, placeholder, className = '' }) {
+  const [open, setOpen] = useState(false);
+  const q = (value || '').toLowerCase();
+  const filtered = q
+    ? options.filter(o =>
+        o.code.toLowerCase().includes(q) ||
+        o.name.toLowerCase().includes(q)
+      ).slice(0, 10)
+    : options.slice(0, 10);
+
+  return (
+    <div className="relative">
+      <input
+        type="text"
+        value={value}
+        onChange={e => { onChange(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        placeholder={placeholder}
+        className={`input-field ${className}`}
+        autoComplete="off"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute z-[60] left-0 right-0 bg-white border border-slate-200 rounded-lg shadow-xl mt-0.5 max-h-52 overflow-y-auto">
+          {filtered.map(o => (
+            <button key={o.code} type="button"
+              onMouseDown={e => { e.preventDefault(); onSelect(o); setOpen(false); }}
+              className="w-full text-left px-3 py-2 hover:bg-blue-50 flex items-baseline gap-2 border-b border-slate-100 last:border-0">
+              <span className="font-mono text-xs text-blue-600 shrink-0">{o.code}</span>
+              <span className="text-sm text-slate-800 truncate">{o.name}</span>
+              {o.sub && <span className="text-xs text-slate-400 shrink-0 ml-auto">{o.sub}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── 受注入力モーダル ────────────────────────────────────────────────────────
 function NewOrderModal({ onClose, onSave }) {
   const { products, customers, copperPrice, prototypes, prototypeBOMs, addBOMEntry } = useApp();
@@ -228,9 +268,27 @@ function NewOrderModal({ onClose, onSave }) {
 
           <Sec title="得意先・納入先">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div><Lbl t="得意先コード" req /><input type="text" value={form.customerCode} onChange={e=>handleCustomerCode(e.target.value)} className="input-field" placeholder="例: C001" /></div>
+              <div>
+                <Lbl t="得意先コード" req />
+                <ComboInput
+                  value={form.customerCode}
+                  onChange={v => handleCustomerCode(v)}
+                  onSelect={o => handleCustomerCode(o.code)}
+                  options={(customers || []).map(c => ({ code: c.code, name: c.name }))}
+                  placeholder="コード or 得意先名で検索"
+                />
+              </div>
               <div className="sm:col-span-2"><Lbl t="得意先名称" /><input type="text" value={form.customerName} onChange={e=>set('customerName',e.target.value)} className="input-field" placeholder="コード入力で自動表示" /></div>
-              <div><Lbl t="納入先コード" /><input type="text" value={form.deliveryAddressCode} onChange={e=>set('deliveryAddressCode',e.target.value)} className="input-field" placeholder="例: DA001" /></div>
+              <div>
+                <Lbl t="納入先コード" />
+                <ComboInput
+                  value={form.deliveryAddressCode}
+                  onChange={v => setForm(f => ({ ...f, deliveryAddressCode: v }))}
+                  onSelect={o => setForm(f => ({ ...f, deliveryAddressCode: o.code, deliveryAddressName: o.name }))}
+                  options={(customers || []).map(c => ({ code: c.code, name: c.name }))}
+                  placeholder="コード or 得意先名で検索"
+                />
+              </div>
               <div className="sm:col-span-2"><Lbl t="納入先名称" /><input type="text" value={form.deliveryAddressName} onChange={e=>set('deliveryAddressName',e.target.value)} className="input-field" placeholder="コード入力で自動表示（手入力も可）" /></div>
               <div className="sm:col-span-3"><Lbl t="納入先住所・TEL" /><input type="text" value={form.deliveryAddressDetail} onChange={e=>set('deliveryAddressDetail',e.target.value)} className="input-field" placeholder="〒XXX-XXXX 住所　TEL: XXXX-XX-XXXX" /></div>
             </div>
@@ -249,13 +307,13 @@ function NewOrderModal({ onClose, onSave }) {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <Lbl t="試作品コード" req />
-                  <select value={form.productCode} onChange={e=>handlePrototypeCode(e.target.value)} className="select-field">
-                    <option value="">-- 選択してください --</option>
-                    {prototypes?.filter(p => p.status !== '転記済').map(p => (
-                      <option key={p.id} value={p.prototypeCode}>{p.prototypeCode}</option>
-                    ))}
-                    <option value="__new__">（新規試作品として登録）</option>
-                  </select>
+                  <ComboInput
+                    value={form.productCode}
+                    onChange={v => handlePrototypeCode(v)}
+                    onSelect={o => handlePrototypeCode(o.code)}
+                    options={(prototypes || []).filter(p => p.status !== '転記済').map(p => ({ code: p.prototypeCode, name: p.name, sub: p.customerName }))}
+                    placeholder="コード or 試作品名で検索"
+                  />
                 </div>
                 <div className="sm:col-span-2"><Lbl t="試作品名" /><input type="text" value={form.productName} onChange={e=>set('productName',e.target.value)} className="input-field" placeholder="試作品名称" /></div>
                 <div className="sm:col-span-2"><Lbl t="客先品名" /><input type="text" value={form.customerProductName} onChange={e=>set('customerProductName',e.target.value)} className="input-field" placeholder="製品ラベル表示用（直送先用）" /></div>
@@ -264,7 +322,16 @@ function NewOrderModal({ onClose, onSave }) {
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                <div><Lbl t="商品コード" req /><input type="text" value={form.productCode} onChange={e=>handleProductCode(e.target.value)} className="input-field" placeholder="例: CV-3.5-3C-BLK" /></div>
+                <div>
+                  <Lbl t="商品コード" req />
+                  <ComboInput
+                    value={form.productCode}
+                    onChange={v => handleProductCode(v)}
+                    onSelect={o => handleProductCode(o.code)}
+                    options={(products || []).map(p => ({ code: p.productCode, name: p.name, sub: p.customerName }))}
+                    placeholder="コード or 製品名で検索"
+                  />
+                </div>
                 <div className="sm:col-span-2"><Lbl t="品名" /><input type="text" value={form.productName} onChange={e=>set('productName',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
                 <div className="sm:col-span-2"><Lbl t="客先品名" /><input type="text" value={form.customerProductName} onChange={e=>set('customerProductName',e.target.value)} className="input-field" placeholder="製品ラベル表示用（直送先用）" /></div>
                 <div><Lbl t="設計書番号" /><input type="text" value={form.designNumber} onChange={e=>set('designNumber',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
