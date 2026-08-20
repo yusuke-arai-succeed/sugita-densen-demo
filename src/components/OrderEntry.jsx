@@ -105,6 +105,18 @@ function GanttChart({ orders }) {
   );
 }
 
+function ModalLabel({ t, req }) {
+  return <label className="text-xs text-slate-500 block mb-1">{t}{req && <span className="text-red-500 ml-0.5">*</span>}</label>;
+}
+function ModalSection({ title, children }) {
+  return (
+    <div className="border-t border-slate-100 pt-4">
+      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{title}</p>
+      {children}
+    </div>
+  );
+}
+
 // ─── 受注入力モーダル ────────────────────────────────────────────────────────
 function NewOrderModal({ onClose, onSave }) {
   const { products, customers, copperPrice, prototypes, prototypeBOMs, addBOMEntry } = useApp();
@@ -181,15 +193,8 @@ function NewOrderModal({ onClose, onSave }) {
     onClose();
   };
 
-  const Lbl = ({ t, req }) => (
-    <label className="text-xs text-slate-500 block mb-1">{t}{req && <span className="text-red-500 ml-0.5">*</span>}</label>
-  );
-  const Sec = ({ title, children }) => (
-    <div className="border-t border-slate-100 pt-4">
-      <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3">{title}</p>
-      {children}
-    </div>
-  );
+  const Lbl = ModalLabel;
+  const Sec = ModalSection;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
