@@ -697,6 +697,7 @@ export default function OrderEntry() {
   const [filterStatus, setFilterStatus]       = useState('');
   const [filterDateFrom, setFilterDateFrom]   = useState('');
   const [filterDateTo, setFilterDateTo]       = useState('');
+  const [filterTrial, setFilterTrial]         = useState(false);
   const [sortField, setSortField]             = useState('finalDeadline');
   const [sortDir, setSortDir]                 = useState('asc');
 
@@ -729,6 +730,9 @@ export default function OrderEntry() {
     }
     if (filterDateTo) {
       result = result.filter(o => o.finalDeadline && o.finalDeadline <= filterDateTo);
+    }
+    if (filterTrial) {
+      result = result.filter(o => o.isTrial === true);
     }
 
     result.sort((a, b) => {
@@ -826,7 +830,7 @@ export default function OrderEntry() {
     </th>
   );
 
-  const hasFilter = filterSearch || filterStatus || filterDateFrom || filterDateTo;
+  const hasFilter = filterSearch || filterStatus || filterDateFrom || filterDateTo || filterTrial;
 
   return (
     <div className="space-y-4">
@@ -892,8 +896,13 @@ export default function OrderEntry() {
                 <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
                   className="input-field text-sm py-1.5" />
               </div>
+              <label className="flex items-center gap-1.5 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
+                <input type="checkbox" checked={filterTrial} onChange={e => setFilterTrial(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-300 accent-amber-500" />
+                <span className={`text-sm font-medium ${filterTrial ? 'text-amber-700' : 'text-slate-600'}`}>試作のみ</span>
+              </label>
               {hasFilter && (
-                <button onClick={() => { setFilterSearch(''); setFilterStatus(''); setFilterDateFrom(''); setFilterDateTo(''); }}
+                <button onClick={() => { setFilterSearch(''); setFilterStatus(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterTrial(false); }}
                   className="text-xs text-slate-500 hover:text-slate-700 underline flex-shrink-0 whitespace-nowrap">
                   クリア
                 </button>
