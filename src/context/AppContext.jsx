@@ -28,12 +28,14 @@ import {
   initialMachineDetails,
   initialFractionRule,
   initialMaterialShelfAssignment,
+  initialPrototypes,
+  initialPrototypeBOMs,
 } from '../data/mockData';
 
 const AppContext = createContext(null);
 
 // スキーマが変わったときにここを更新 → 古いlocalStorageを自動クリア
-const STORAGE_VERSION = 'v11';
+const STORAGE_VERSION = 'v12';
 
 // ── 生産計画から製造指示を自動生成 ───────────────────────────────
 function buildMfgOrderFromPlan(item, order, product, machineId, existingCount) {
@@ -256,6 +258,23 @@ export function AppProvider({ children }) {
     } catch { return initialProductBOMs; }
   });
 
+  // ── 試作品マスタ ─────────────────────────────────────────────────
+  const [prototypes, setPrototypes] = useState(() => {
+    try {
+      if (localStorage.getItem('sd_version') !== STORAGE_VERSION) return initialPrototypes;
+      const saved = localStorage.getItem('sd_prototypes');
+      return saved ? JSON.parse(saved) : initialPrototypes;
+    } catch { return initialPrototypes; }
+  });
+
+  const [prototypeBOMs, setPrototypeBOMs] = useState(() => {
+    try {
+      if (localStorage.getItem('sd_version') !== STORAGE_VERSION) return initialPrototypeBOMs;
+      const saved = localStorage.getItem('sd_prototypeBOMs');
+      return saved ? JSON.parse(saved) : initialPrototypeBOMs;
+    } catch { return initialPrototypeBOMs; }
+  });
+
   // ── 取引先設定（銅価格タイミングなど） ──────────────────────────
   // suppliers定数の copperPriceTiming を上書き可能にするオーバーレイ
   const _defaultSupplierSettings = Object.fromEntries(
@@ -282,6 +301,7 @@ export function AppProvider({ children }) {
           'sd_productBOMs','sd_supplierSettings',
           'sd_inspections','sd_labelIssuances','sd_techRequests',
           'sd_troubleReports','sd_machineDetails',
+          'sd_prototypes','sd_prototypeBOMs',
         ].forEach(k => localStorage.removeItem(k));
         localStorage.setItem('sd_version', STORAGE_VERSION);
         return INITIAL_PRODUCTION_SCHEDULE;
@@ -346,6 +366,8 @@ export function AppProvider({ children }) {
   }, [materialIssuances]);
   useEffect(() => { localStorage.setItem('sd_productBOMs',         JSON.stringify(productBOMs));         }, [productBOMs]);
   useEffect(() => { localStorage.setItem('sd_supplierSettings',    JSON.stringify(supplierSettings));    }, [supplierSettings]);
+  useEffect(() => { localStorage.setItem('sd_prototypes',          JSON.stringify(prototypes));          }, [prototypes]);
+  useEffect(() => { localStorage.setItem('sd_prototypeBOMs',       JSON.stringify(prototypeBOMs));       }, [prototypeBOMs]);
 
   const deadlineAlerts = orders.filter((o) => {
     if (o.status !== '照会（仮押さえ）') return false;
@@ -720,6 +742,78 @@ export function AppProvider({ children }) {
     }));
   };
 
+  // ── 試作品BOM操作 ───────────────────────────────────────────────
+  const updatePrototypeBOM = (protoId, boms) => {
+    setPrototypeBOMs(prev => ({ ...prev, [protoId]: boms }));
+  };
+
+  const addPrototypeBOMEntry = (protoId, entry) => {
+    setPrototypeBOMs(prev => ({
+      ...prev,
+      [protoId]: [...(prev[protoId] || []), entry],
+    }));
+  };
+
+  const deletePrototypeBOMEntry = (protoId, entryId) => {
+    setPrototypeBOMs(prev => ({
+      ...prev,
+      [protoId]: (prev[protoId] || []).filter(b => b.id !== entryId),
+    }));
+  };
+
+  // 試作品→製品マスタへ転記（製品コードを自動発行）
+  const transferPrototypeToProduct = (protoId) => {
+    const proto = prototypes.find(p => p.id === protoId);
+    if (!proto || proto.transferredProductId) return null;
+
+    const newProductId = `P${String(Date.now()).slice(-6)}`;
+    const existingCodes = products.map(p => p.productCode).filter(c => c.startsWith('NEW-'));
+    const seq = String(existingCodes.length + 1).padStart(4, '0');
+    const newProductCode = `NEW-${seq}`;
+
+    const newProduct = {
+      id: newProductId,
+      productCode: newProductCode,
+      designNumber: proto.designNumber || '',
+      customerCode: proto.customerCode || '',
+      customerName: proto.customerName || '',
+      sheathColor: proto.sheathColor || '',
+      conductorPitch: '',
+      packaging: 'ドラム(D400)',
+      requiredDocuments: [],
+      sampleLength: 0,
+      billingCycle: '月末',
+      shippingMethod: 'FAX',
+      spec: proto.spec || { outerDiameter: { min: 0, max: 0 }, wallThickness: { min: 0, max: 0 } },
+      name: proto.name,
+      copperContentPerM: 0,
+      drawingUrl: '',
+      drawingRevision: 'Rev.1',
+      cableType: '',
+      workConditions: {},
+      labelSettings: { printer: '1号機', paperType: '標準', inspectionRequired: false },
+      sourcePrototypeCode: proto.prototypeCode,
+      sourcePrototypeId: protoId,
+    };
+
+    setProducts(prev => [...prev, newProduct]);
+
+    // 試作品BOMを製品BOMにコピー
+    const boms = prototypeBOMs[protoId];
+    if (boms && boms.length > 0) {
+      setProductBOMs(prev => ({ ...prev, [newProductId]: boms }));
+    }
+
+    // 試作品を転記済みに更新
+    setPrototypes(prev => prev.map(p =>
+      p.id === protoId
+        ? { ...p, status: '転記済', transferredProductId: newProductId, transferredProductCode: newProductCode, transferredDate: '2026-08-20' }
+        : p
+    ));
+
+    return newProduct;
+  };
+
   // ── 取引先設定操作 ──────────────────────────────────────────────
   const updateSupplierSetting = (supplierId, updates) => {
     setSupplierSettings(prev => ({
@@ -807,6 +901,13 @@ export function AppProvider({ children }) {
     updateProductBOM,
     addBOMEntry,
     deleteBOMEntry,
+    // 試作品マスタ
+    prototypes, setPrototypes,
+    prototypeBOMs,
+    updatePrototypeBOM,
+    addPrototypeBOMEntry,
+    deletePrototypeBOMEntry,
+    transferPrototypeToProduct,
     // 取引先設定
     supplierSettings,
     updateSupplierSetting,

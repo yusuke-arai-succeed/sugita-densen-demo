@@ -686,6 +686,314 @@ function OrderHistoryModal({ product, onClose }) {
 const PRINTERS = ['1号機', '2号機', '3号機'];
 const PAPER_TYPES = ['標準', 'TSEマーク', 'PSマーク', 'ULマーク'];
 
+// ─── 試作品マスタタブ ─────────────────────────────────────────────────────────
+function PrototypeMasterTab() {
+  const {
+    prototypes, setPrototypes, prototypeBOMs,
+    updatePrototypeBOM, addPrototypeBOMEntry, deletePrototypeBOMEntry,
+    transferPrototypeToProduct, materials, copperPrice, calcMaterialPrice,
+    customers,
+  } = useApp();
+
+  const [search, setSearch] = useState('');
+  const [selectedId, setSelectedId] = useState(() => prototypes[0]?.id || '');
+  const [subTab, setSubTab] = useState('list');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [addBomForm, setAddBomForm] = useState({ process: PROCESS_ORDER[0], materialId: '', qty: '', lossRate: '1.02' });
+  const [showNewProtoModal, setShowNewProtoModal] = useState(false);
+  const [newProtoForm, setNewProtoForm] = useState({
+    prototypeCode: '', name: '', customerCode: '', customerName: '',
+    sheathColor: '', designNumber: '', remarks: '',
+    spec: { outerDiameter: { min: '', max: '' }, wallThickness: { min: '', max: '' } },
+  });
+  const [transferConfirm, setTransferConfirm] = useState(null);
+  const [transferResult, setTransferResult] = useState(null);
+
+  const filtered = prototypes.filter(p =>
+    p.prototypeCode.toLowerCase().includes(search.toLowerCase()) ||
+    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    p.customerName.includes(search)
+  );
+
+  const selected = prototypes.find(p => p.id === selectedId);
+  const boms = prototypeBOMs[selectedId] || [];
+
+  const handleAddBOM = () => {
+    if (!addBomForm.materialId || !addBomForm.qty) return;
+    addPrototypeBOMEntry(selectedId, {
+      id: `PB-${Date.now()}`,
+      prototypeId: selectedId,
+      process: addBomForm.process,
+      materialId: addBomForm.materialId,
+      qty: parseFloat(addBomForm.qty),
+      lossRate: parseFloat(addBomForm.lossRate) || 1.02,
+    });
+    setShowAddForm(false);
+    setAddBomForm({ process: PROCESS_ORDER[0], materialId: '', qty: '', lossRate: '1.02' });
+  };
+
+  const handleTransfer = () => {
+    const result = transferPrototypeToProduct(transferConfirm);
+    setTransferConfirm(null);
+    if (result) setTransferResult(result);
+  };
+
+  const handleSaveNewProto = () => {
+    const seq = String(prototypes.length + 1).padStart(4, '0');
+    const newProto = {
+      id: `PT${Date.now()}`,
+      prototypeCode: newProtoForm.prototypeCode || `PT-${new Date().getFullYear()}-${seq}`,
+      name: newProtoForm.name,
+      customerCode: newProtoForm.customerCode,
+      customerName: newProtoForm.customerName,
+      sheathColor: newProtoForm.sheathColor,
+      designNumber: newProtoForm.designNumber,
+      remarks: newProtoForm.remarks,
+      spec: {
+        outerDiameter: { min: parseFloat(newProtoForm.spec.outerDiameter.min)||0, max: parseFloat(newProtoForm.spec.outerDiameter.max)||0 },
+        wallThickness: { min: parseFloat(newProtoForm.spec.wallThickness.min)||0, max: parseFloat(newProtoForm.spec.wallThickness.max)||0 },
+      },
+      createdDate: '2026-08-20',
+      status: '試作中',
+      transferredProductId: null,
+      transferredProductCode: null,
+      transferredDate: null,
+    };
+    setPrototypes(prev => [...prev, newProto]);
+    setSelectedId(newProto.id);
+    setShowNewProtoModal(false);
+    setNewProtoForm({ prototypeCode:'', name:'', customerCode:'', customerName:'', sheathColor:'', designNumber:'', remarks:'',
+      spec:{ outerDiameter:{min:'',max:''}, wallThickness:{min:'',max:''} } });
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex gap-2 border-b border-slate-200 mb-2">
+        {[['list','試作品一覧'],['bom','BOM管理']].map(([id,label]) => (
+          <button key={id} onClick={() => setSubTab(id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${subTab===id?'border-amber-500 text-amber-700':'border-transparent text-slate-500 hover:text-slate-700'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {subTab === 'list' && (
+        <>
+          <div className="flex items-center gap-3">
+            <input className="input-field max-w-xs" placeholder="試作コード・品名・得意先で検索..." value={search} onChange={e => setSearch(e.target.value)} />
+            <button onClick={() => setShowNewProtoModal(true)} className="btn-primary">＋ 試作品追加</button>
+            <span className="text-xs text-slate-400 ml-auto">{filtered.length}件</span>
+          </div>
+          <div className="card p-0 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200">
+                  <tr>
+                    {['試作コード','品名','得意先','ステータス','作成日','転記先','操作'].map(h => (
+                      <th key={h} className="text-left py-3 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map(p => (
+                    <tr key={p.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <td className="py-3 px-4 font-mono text-xs text-amber-700 font-semibold whitespace-nowrap">{p.prototypeCode}</td>
+                      <td className="py-3 px-4 text-slate-800 whitespace-nowrap">{p.name}</td>
+                      <td className="py-3 px-4 text-slate-600 whitespace-nowrap">{p.customerName}</td>
+                      <td className="py-3 px-4">
+                        <span className={`badge ${p.status==='転記済'?'bg-green-100 text-green-700':'bg-amber-100 text-amber-700'}`}>{p.status}</span>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-xs text-slate-500">{p.createdDate}</td>
+                      <td className="py-3 px-4 font-mono text-xs">
+                        {p.transferredProductCode
+                          ? <span className="text-green-700 font-semibold">{p.transferredProductCode}</span>
+                          : <span className="text-slate-300">—</span>}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex gap-2">
+                          <button onClick={() => { setSelectedId(p.id); setSubTab('bom'); }} className="text-xs text-purple-600 hover:underline whitespace-nowrap">BOM</button>
+                          {p.status !== '転記済' && (
+                            <button onClick={() => setTransferConfirm(p.id)}
+                              className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded hover:bg-blue-700 whitespace-nowrap">
+                              製品マスタへ転記
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {filtered.length === 0 && (
+                    <tr><td colSpan={7} className="py-8 text-center text-slate-400 text-sm">試作品がありません</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+
+      {subTab === 'bom' && (
+        <div className="card p-4">
+          <div className="flex items-center gap-3 mb-4">
+            <label className="text-sm text-slate-600 font-medium">試作品：</label>
+            <select value={selectedId} onChange={e => setSelectedId(e.target.value)} className="select-field max-w-xs">
+              {prototypes.map(p => <option key={p.id} value={p.id}>{p.prototypeCode} — {p.name}</option>)}
+            </select>
+          </div>
+
+          {selected && (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="font-semibold text-slate-700 text-sm">BOM一覧（{selected.name}）</h4>
+                <button onClick={() => setShowAddForm(v => !v)} className="text-xs text-blue-600 hover:underline">＋ 材料追加</button>
+              </div>
+
+              {showAddForm && (
+                <div className="bg-slate-50 rounded-lg p-3 mb-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">工程</label>
+                    <select value={addBomForm.process} onChange={e => setAddBomForm(f => ({...f, process: e.target.value}))} className="select-field">
+                      {PROCESS_ORDER.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">材料</label>
+                    <select value={addBomForm.materialId} onChange={e => setAddBomForm(f => ({...f, materialId: e.target.value}))} className="select-field">
+                      <option value="">選択...</option>
+                      {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">使用量(m/100m)</label>
+                    <input type="number" value={addBomForm.qty} onChange={e => setAddBomForm(f => ({...f, qty: e.target.value}))} className="input-field" placeholder="例: 102" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-500 block mb-1">ロス率</label>
+                    <input type="number" value={addBomForm.lossRate} onChange={e => setAddBomForm(f => ({...f, lossRate: e.target.value}))} className="input-field" step="0.01" />
+                  </div>
+                  <div className="sm:col-span-4 flex gap-2 justify-end">
+                    <button onClick={() => setShowAddForm(false)} className="btn-secondary text-xs">キャンセル</button>
+                    <button onClick={handleAddBOM} className="btn-primary text-xs">追加</button>
+                  </div>
+                </div>
+              )}
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 border-b border-slate-200">
+                    <tr>
+                      {['工程','材料名','使用量','ロス率','単価','削除'].map(h => (
+                        <th key={h} className="text-left py-2 px-3 text-xs font-medium text-slate-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {boms.length === 0 && (
+                      <tr><td colSpan={6} className="py-6 text-center text-slate-400 text-sm">BOMがまだ登録されていません</td></tr>
+                    )}
+                    {boms.map(b => {
+                      const mat = materials.find(m => m.id === b.materialId);
+                      const unitPrice = mat ? calcMaterialPrice(mat, null, copperPrice) : 0;
+                      return (
+                        <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-2 px-3">
+                            <span className={`badge text-xs ${PROCESS_COLORS[b.process] || 'bg-slate-100 text-slate-600'}`}>{b.process}</span>
+                          </td>
+                          <td className="py-2 px-3 text-slate-700">{mat?.name || b.materialId}</td>
+                          <td className="py-2 px-3 font-mono text-slate-700">{b.qty}</td>
+                          <td className="py-2 px-3 font-mono text-slate-700">{b.lossRate}</td>
+                          <td className="py-2 px-3 font-mono text-slate-600">¥{unitPrice.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+                          <td className="py-2 px-3">
+                            <button onClick={() => deletePrototypeBOMEntry(selectedId, b.id)} className="text-xs text-red-500 hover:text-red-700">削除</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* 転記確認ダイアログ */}
+      {transferConfirm && (() => {
+        const proto = prototypes.find(p => p.id === transferConfirm);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 mx-4">
+              <div className="text-3xl mb-3 text-center">📋</div>
+              <h3 className="font-bold text-center mb-2 text-slate-800">製品マスタへ転記</h3>
+              <p className="text-sm text-slate-600 text-center mb-1">
+                <span className="font-semibold text-amber-700">{proto?.prototypeCode}</span>
+              </p>
+              <p className="text-sm text-slate-600 text-center mb-4">
+                を製品マスタへ転記します。製品コードは自動発行されます。
+              </p>
+              <div className="flex gap-3">
+                <button onClick={() => setTransferConfirm(null)} className="flex-1 btn-secondary">キャンセル</button>
+                <button onClick={handleTransfer} className="flex-1 btn-primary">転記する</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 転記完了通知 */}
+      {transferResult && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 mx-4">
+            <div className="text-3xl mb-3 text-center">✅</div>
+            <h3 className="font-bold text-center mb-2 text-slate-800">転記完了</h3>
+            <p className="text-sm text-slate-600 text-center mb-1">製品コード：<span className="font-mono font-bold text-blue-700">{transferResult.productCode}</span></p>
+            <p className="text-xs text-slate-400 text-center mb-4">製品マスタで内容を確認・編集してください。</p>
+            <button onClick={() => setTransferResult(null)} className="w-full btn-primary">閉じる</button>
+          </div>
+        </div>
+      )}
+
+      {/* 新規試作品モーダル */}
+      {showNewProtoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
+              <h2 className="font-bold text-slate-800">試作品マスタ追加</h2>
+              <button onClick={() => setShowNewProtoModal(false)} className="text-slate-400 hover:text-slate-600 text-xl">✕</button>
+            </div>
+            <div className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-slate-500 block mb-1">試作コード（省略時は自動発行）</label>
+                  <input value={newProtoForm.prototypeCode} onChange={e => setNewProtoForm(f=>({...f,prototypeCode:e.target.value}))} className="input-field" placeholder="PT-YYYY-XXXX" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">品名 <span className="text-red-500">*</span></label>
+                  <input value={newProtoForm.name} onChange={e => setNewProtoForm(f=>({...f,name:e.target.value}))} className="input-field" placeholder="試作品名称" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">得意先コード</label>
+                  <input value={newProtoForm.customerCode} onChange={e => setNewProtoForm(f=>({...f,customerCode:e.target.value}))} className="input-field" placeholder="例: C001" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">得意先名称</label>
+                  <input value={newProtoForm.customerName} onChange={e => setNewProtoForm(f=>({...f,customerName:e.target.value}))} className="input-field" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">シース色</label>
+                  <input value={newProtoForm.sheathColor} onChange={e => setNewProtoForm(f=>({...f,sheathColor:e.target.value}))} className="input-field" placeholder="黒" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">設計書番号</label>
+                  <input value={newProtoForm.designNumber} onChange={e => setNewProtoForm(f=>({...f,designNumber:e.target.value}))} className="input-field" placeholder="TF-PROTO-XXXX" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">外径 min</label>
+                  <input type="number" step="0.1" value={newProtoForm.spec.outerDiameter.min} onChange={e => setNewProtoForm(f=>({...f,spec:{...f.spec,outerDiameter:{...f.spec.outerDiameter,min:e.target.value}}}))} className="input-field" /></div>
+                <div><label className="text-xs text-slate-500 block mb-1">外径 max</label>
+                  <input type="number" step="0.1" value={newProtoForm.spec.outerDiameter.max} onChange={e => setNewProtoForm(f=>({...f,spec:{...f.spec,outerDiameter:{...f.spec.outerDiameter,max:e.target.value}}}))} className="input-field" /></div>
+              </div>
+              <div><label className="text-xs text-slate-500 block mb-1">備考</label>
+                <textarea value={newProtoForm.remarks} onChange={e => setNewProtoForm(f=>({...f,remarks:e.target.value}))} rows={3} className="input-field w-full resize-none" /></div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-200 flex gap-3 justify-end">
+              <button onClick={() => setShowNewProtoModal(false)} className="btn-secondary px-6">キャンセル</button>
+              <button onClick={handleSaveNewProto} disabled={!newProtoForm.name} className="btn-primary px-6 disabled:opacity-40">登録</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ProductMaster() {
   const { products, setProducts, customers } = useApp();
   const [search, setSearch] = useState('');
@@ -720,7 +1028,7 @@ export default function ProductMaster() {
     <div className="space-y-4">
       {/* Tab */}
       <div className="flex gap-2 border-b border-slate-200">
-        {[['products', '製品一覧'], ['bom', 'BOM管理']].map(([id, label]) => (
+        {[['products', '製品一覧'], ['bom', 'BOM管理'], ['prototypes', '試作品マスタ']].map(([id, label]) => (
           <button key={id} onClick={() => setActiveTab(id)}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${activeTab === id ? 'border-blue-700 text-blue-700' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>
             {label}
@@ -806,6 +1114,10 @@ export default function ProductMaster() {
             setSelectedProductId={setBomProductId}
           />
         </div>
+      )}
+
+      {activeTab === 'prototypes' && (
+        <PrototypeMasterTab />
       )}
 
       {showModal && (

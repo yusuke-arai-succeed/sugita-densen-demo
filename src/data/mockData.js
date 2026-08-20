@@ -1178,3 +1178,42 @@ export const initialMaterialShelfAssignment = {
 
 // ─── 端数処理初期設定 ──────────────────────────────────────────────────
 export const initialFractionRule = { global: '四捨五入', decimals: 2 };
+
+// ─── 試作品マスタ ────────────────────────────────────────────────────────
+export const initialPrototypes = [
+  {
+    id: 'PT001',
+    prototypeCode: 'PT-2026-0001',
+    name: 'CV 試作 2.0mm² 2芯 白シース',
+    customerCode: 'C001',
+    customerName: 'FDC株式会社',
+    sheathColor: '白',
+    designNumber: 'TF-PROTO-0001',
+    spec: { outerDiameter: { min: 8.0, max: 9.5 }, wallThickness: { min: 0.6, max: 1.0 } },
+    createdDate: '2026-04-10',
+    status: '試作中',
+    remarks: '新規用途向け細径CV。シース素材は通常品と同一だが外径を小径化。',
+    transferredProductId: null,
+    transferredProductCode: null,
+    transferredDate: null,
+  },
+  {
+    id: 'PT002',
+    prototypeCode: 'PT-2026-0002',
+    name: 'THHW 0.75mm² 単芯 オレンジ',
+    customerCode: 'C003',
+    customerName: '豊田自動織機',
+    sheathColor: 'オレンジ',
+    designNumber: 'TF-PROTO-0002',
+    spec: { outerDiameter: { min: 2.2, max: 2.8 }, wallThickness: { min: 0.4, max: 0.7 } },
+    createdDate: '2026-05-02',
+    status: '試作中',
+    remarks: '車載向け超細線試作。絶縁色はオレンジ（HV規格対応）。',
+    transferredProductId: null,
+    transferredProductCode: null,
+    transferredDate: null,
+  },
+];
+
+export const initialPrototypeBOMs = {};
+export const initialPrototypeOrders = [];

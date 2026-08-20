@@ -107,15 +107,16 @@ function GanttChart({ orders }) {
 
 // ─── 受注入力モーダル ────────────────────────────────────────────────────────
 function NewOrderModal({ onClose, onSave }) {
-  const { products, customers, copperPrice } = useApp();
+  const { products, customers, copperPrice, prototypes, prototypeBOMs, addBOMEntry } = useApp();
 
   const [form, setForm] = useState({
+    isTrial: false,
     orderDate: '2026-05-21', status: '照会（仮押さえ）', paidMaterialOffset: '非対象',
     inputPersonCode: '101', inputPerson: '細野', approverCode: '', approver: '',
     customerCode: '', customerName: '',
     deliveryAddressCode: '', deliveryAddressName: '', deliveryAddressDetail: '',
     customerOrderNum1: '', customerOrderNum2: '', customerOrderNum3: '',
-    productCode: '', productId: '', productName: '',
+    productCode: '', productId: '', productName: '', prototypeId: '',
     customerProductName: '', designNumber: '', specNumber: '',
     cableEntries: [{ cableLength: '', bundleCount: '' }],
     packaging: 'ドラム(D400)', weightPer1000m: '',
@@ -140,6 +141,18 @@ function NewOrderModal({ onClose, onSave }) {
     }));
   };
 
+  const handlePrototypeCode = (code) => {
+    const pt = prototypes?.find(p => p.prototypeCode === code);
+    setForm(f => ({
+      ...f,
+      productCode: code,
+      prototypeId: pt?.id || '',
+      productId: '',
+      productName: pt?.name || '',
+      designNumber: pt?.designNumber || f.designNumber,
+    }));
+  };
+
   const handleCustomerCode = (code) => {
     const c = customers?.find(cu => cu.code === code);
     setForm(f => ({ ...f, customerCode: code, customerName: c?.name || f.customerName }));
@@ -156,9 +169,10 @@ function NewOrderModal({ onClose, onSave }) {
 
   const handleSave = () => {
     const seq = String(Math.floor(Math.random()*9000)+1000);
+    const prefix = form.isTrial ? 'TMP' : 'SO';
     const newOrder = {
       id: `O${Date.now()}`,
-      orderNumber: `SO-${form.orderDate.replace(/-/g,'').slice(2,6)}-${seq}`,
+      orderNumber: `${prefix}-${form.orderDate.replace(/-/g,'').slice(2,6)}-${seq}`,
       quoteId: null,
       shippingSchedule: [],
       ...form,
@@ -181,7 +195,16 @@ function NewOrderModal({ onClose, onSave }) {
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col">
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
-          <h2 className="font-bold text-slate-800 text-lg">受注入力</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="font-bold text-slate-800 text-lg">受注入力</h2>
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input type="checkbox" checked={form.isTrial} onChange={e => set('isTrial', e.target.checked)}
+                className="w-4 h-4 rounded border-slate-300 accent-amber-500" />
+              <span className={`text-sm font-semibold px-2 py-0.5 rounded ${form.isTrial ? 'bg-amber-100 text-amber-700' : 'text-slate-500'}`}>
+                試作受注
+              </span>
+            </label>
+          </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
         </div>
 
@@ -216,14 +239,33 @@ function NewOrderModal({ onClose, onSave }) {
             </div>
           </Sec>
 
-          <Sec title="商品情報">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div><Lbl t="商品コード" req /><input type="text" value={form.productCode} onChange={e=>handleProductCode(e.target.value)} className="input-field" placeholder="例: CV-3.5-3C-BLK" /></div>
-              <div className="sm:col-span-2"><Lbl t="品名" /><input type="text" value={form.productName} onChange={e=>set('productName',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
-              <div className="sm:col-span-2"><Lbl t="客先品名" /><input type="text" value={form.customerProductName} onChange={e=>set('customerProductName',e.target.value)} className="input-field" placeholder="製品ラベル表示用（直送先用）" /></div>
-              <div><Lbl t="設計書番号" /><input type="text" value={form.designNumber} onChange={e=>set('designNumber',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
-              <div><Lbl t="仕様書番号" /><input type="text" value={form.specNumber} onChange={e=>set('specNumber',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
-            </div>
+          <Sec title={form.isTrial ? '試作品情報' : '商品情報'}>
+            {form.isTrial ? (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div>
+                  <Lbl t="試作品コード" req />
+                  <select value={form.productCode} onChange={e=>handlePrototypeCode(e.target.value)} className="select-field">
+                    <option value="">-- 選択してください --</option>
+                    {prototypes?.filter(p => p.status !== '転記済').map(p => (
+                      <option key={p.id} value={p.prototypeCode}>{p.prototypeCode}</option>
+                    ))}
+                    <option value="__new__">（新規試作品として登録）</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2"><Lbl t="試作品名" /><input type="text" value={form.productName} onChange={e=>set('productName',e.target.value)} className="input-field" placeholder="試作品名称" /></div>
+                <div className="sm:col-span-2"><Lbl t="客先品名" /><input type="text" value={form.customerProductName} onChange={e=>set('customerProductName',e.target.value)} className="input-field" placeholder="製品ラベル表示用（直送先用）" /></div>
+                <div><Lbl t="設計書番号" /><input type="text" value={form.designNumber} onChange={e=>set('designNumber',e.target.value)} className="input-field" placeholder="例: TF-PROTO-XXXX" /></div>
+                <div><Lbl t="仕様書番号" /><input type="text" value={form.specNumber} onChange={e=>set('specNumber',e.target.value)} className="input-field" placeholder="仕様書番号" /></div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                <div><Lbl t="商品コード" req /><input type="text" value={form.productCode} onChange={e=>handleProductCode(e.target.value)} className="input-field" placeholder="例: CV-3.5-3C-BLK" /></div>
+                <div className="sm:col-span-2"><Lbl t="品名" /><input type="text" value={form.productName} onChange={e=>set('productName',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
+                <div className="sm:col-span-2"><Lbl t="客先品名" /><input type="text" value={form.customerProductName} onChange={e=>set('customerProductName',e.target.value)} className="input-field" placeholder="製品ラベル表示用（直送先用）" /></div>
+                <div><Lbl t="設計書番号" /><input type="text" value={form.designNumber} onChange={e=>set('designNumber',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
+                <div><Lbl t="仕様書番号" /><input type="text" value={form.specNumber} onChange={e=>set('specNumber',e.target.value)} className="input-field" placeholder="商品コード入力で自動表示" /></div>
+              </div>
+            )}
           </Sec>
 
           <Sec title="納品仕様">
@@ -298,7 +340,7 @@ function NewOrderModal({ onClose, onSave }) {
         <div className="px-6 py-4 border-t border-slate-200 flex gap-3 justify-end flex-shrink-0 bg-white">
           <button onClick={onClose} className="btn-secondary px-6">キャンセル</button>
           <button onClick={handleSave}
-            disabled={!form.customerCode || !form.productCode || !form.totalQuantity || !form.finalDeadline}
+            disabled={!form.customerCode || (!form.isTrial && !form.productCode) || !form.totalQuantity || !form.finalDeadline}
             className="btn-primary px-6 disabled:opacity-40 disabled:cursor-not-allowed">
             受注登録
           </button>
@@ -890,6 +932,7 @@ export default function OrderEntry() {
                         }`}>
                         <td className="py-3 px-3 font-mono text-xs text-slate-600 whitespace-nowrap">
                           {isAlert && <span className="mr-1 text-red-500">⚠️</span>}
+                          {o.isTrial && <span className="mr-1 inline-block px-1 py-0 bg-amber-100 text-amber-700 rounded text-xs font-semibold" style={{fontSize:'10px'}}>試作</span>}
                           {o.orderNumber}
                         </td>
                         <td className="py-3 px-3">
