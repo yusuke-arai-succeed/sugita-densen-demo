@@ -699,7 +699,7 @@ function PrototypeMasterTab() {
   const [selectedId, setSelectedId] = useState(() => prototypes[0]?.id || '');
   const [subTab, setSubTab] = useState('list');
   const [showAddForm, setShowAddForm] = useState(false);
-  const [addBomForm, setAddBomForm] = useState({ process: PROCESS_ORDER[0], materialId: '', qty: '', lossRate: '1.02' });
+  const [addBomForm, setAddBomForm] = useState({ process: PROCESS_ORDER[0], materialId: '', customMaterialName: '', qty: '', lossRate: '1.02' });
   const [showNewProtoModal, setShowNewProtoModal] = useState(false);
   const [newProtoForm, setNewProtoForm] = useState({
     prototypeCode: '', name: '', customerCode: '', customerName: '',
@@ -718,18 +718,24 @@ function PrototypeMasterTab() {
   const selected = prototypes.find(p => p.id === selectedId);
   const boms = prototypeBOMs[selectedId] || [];
 
+  const CUSTOM_MATERIAL_KEY = '__custom__';
+  const isCustomMaterial = addBomForm.materialId === CUSTOM_MATERIAL_KEY;
+
   const handleAddBOM = () => {
-    if (!addBomForm.materialId || !addBomForm.qty) return;
+    const isCustom = addBomForm.materialId === CUSTOM_MATERIAL_KEY;
+    if ((!addBomForm.materialId) || (isCustom && !addBomForm.customMaterialName) || !addBomForm.qty) return;
     addPrototypeBOMEntry(selectedId, {
       id: `PB-${Date.now()}`,
       prototypeId: selectedId,
       process: addBomForm.process,
-      materialId: addBomForm.materialId,
+      materialId: isCustom ? CUSTOM_MATERIAL_KEY : addBomForm.materialId,
+      customMaterialName: isCustom ? addBomForm.customMaterialName : undefined,
+      isPrototypeMaterial: isCustom,
       qty: parseFloat(addBomForm.qty),
       lossRate: parseFloat(addBomForm.lossRate) || 1.02,
     });
     setShowAddForm(false);
-    setAddBomForm({ process: PROCESS_ORDER[0], materialId: '', qty: '', lossRate: '1.02' });
+    setAddBomForm({ process: PROCESS_ORDER[0], materialId: '', customMaterialName: '', qty: '', lossRate: '1.02' });
   };
 
   const handleTransfer = () => {
@@ -856,12 +862,19 @@ function PrototypeMasterTab() {
                       {PROCESS_ORDER.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
-                  <div>
+                  <div className={isCustomMaterial ? 'sm:col-span-2' : ''}>
                     <label className="text-xs text-slate-500 block mb-1">材料</label>
-                    <select value={addBomForm.materialId} onChange={e => setAddBomForm(f => ({...f, materialId: e.target.value}))} className="select-field">
+                    <select value={addBomForm.materialId} onChange={e => setAddBomForm(f => ({...f, materialId: e.target.value, customMaterialName: ''}))} className="select-field">
                       <option value="">選択...</option>
                       {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      <option disabled>──────────</option>
+                      <option value={CUSTOM_MATERIAL_KEY}>＋ 試作品用原材料（直接入力）</option>
                     </select>
+                    {isCustomMaterial && (
+                      <input type="text" value={addBomForm.customMaterialName}
+                        onChange={e => setAddBomForm(f => ({...f, customMaterialName: e.target.value}))}
+                        className="input-field mt-1" placeholder="原材料名を入力..." />
+                    )}
                   </div>
                   <div>
                     <label className="text-xs text-slate-500 block mb-1">使用量(m/100m)</label>
@@ -892,17 +905,29 @@ function PrototypeMasterTab() {
                       <tr><td colSpan={6} className="py-6 text-center text-slate-400 text-sm">BOMがまだ登録されていません</td></tr>
                     )}
                     {boms.map(b => {
-                      const mat = materials.find(m => m.id === b.materialId);
-                      const unitPrice = mat ? calcMaterialPrice(mat, null, copperPrice) : 0;
+                      const mat = b.isPrototypeMaterial ? null : materials.find(m => m.id === b.materialId);
+                      const unitPrice = mat ? calcMaterialPrice(mat, null, copperPrice) : null;
+                      const materialName = b.isPrototypeMaterial
+                        ? (b.customMaterialName || b.materialId)
+                        : (mat?.name || b.materialId);
                       return (
                         <tr key={b.id} className="border-b border-slate-100 hover:bg-slate-50">
                           <td className="py-2 px-3">
                             <span className={`badge text-xs ${PROCESS_COLORS[b.process] || 'bg-slate-100 text-slate-600'}`}>{b.process}</span>
                           </td>
-                          <td className="py-2 px-3 text-slate-700">{mat?.name || b.materialId}</td>
+                          <td className="py-2 px-3">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="text-slate-700">{materialName}</span>
+                              {b.isPrototypeMaterial && (
+                                <span className="inline-block px-1.5 py-0 bg-amber-100 text-amber-700 border border-amber-300 rounded text-xs font-semibold leading-5">試作用</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="py-2 px-3 font-mono text-slate-700">{b.qty}</td>
                           <td className="py-2 px-3 font-mono text-slate-700">{b.lossRate}</td>
-                          <td className="py-2 px-3 font-mono text-slate-600">¥{unitPrice.toLocaleString(undefined,{maximumFractionDigits:1})}</td>
+                          <td className="py-2 px-3 font-mono text-slate-600">
+                            {unitPrice !== null ? `¥${unitPrice.toLocaleString(undefined,{maximumFractionDigits:1})}` : <span className="text-slate-300">—</span>}
+                          </td>
                           <td className="py-2 px-3">
                             <button onClick={() => deletePrototypeBOMEntry(selectedId, b.id)} className="text-xs text-red-500 hover:text-red-700">削除</button>
                           </td>
