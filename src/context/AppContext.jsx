@@ -540,6 +540,7 @@ export function AppProvider({ children }) {
       poNumber: po.poNumber,
       materialId: po.materialId,
       materialName: po.materialName,
+      isPrototypeMaterial: po.isPrototypeMaterial || false,
       unit: po.unit,
       orderedQty: po.orderedQty,
       receivedQty: 0,

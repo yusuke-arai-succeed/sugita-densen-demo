@@ -15,11 +15,29 @@ const PO_STATUS_COLORS = {
   '完納':         'bg-green-100 text-green-700',
 };
 
+// 試作用原材料のIDプレフィックス
+const PROTO_MAT_PREFIX = '__proto__:';
+
 // ─── 発注書モーダル ────────────────────────────────────────────
 function PurchaseOrderModal({ initialMaterial, onClose, onSave }) {
-  const { suppliers, materials, materialReorderConfig } = useApp();
+  const { suppliers, materials, materialReorderConfig, prototypeBOMs } = useApp();
   const cfg = initialMaterial ? materialReorderConfig[initialMaterial.id] : null;
   const defaultSupplier = cfg ? suppliers.find(s => s.id === cfg.defaultSupplierId) : null;
+
+  // 全試作BOMs から試作用原材料を収集（重複排除）
+  const protoMaterials = useMemo(() => {
+    const seen = new Set();
+    const result = [];
+    Object.values(prototypeBOMs).forEach(boms => {
+      (boms || []).filter(b => b.isPrototypeMaterial && b.customMaterialName).forEach(b => {
+        if (!seen.has(b.customMaterialName)) {
+          seen.add(b.customMaterialName);
+          result.push({ id: `${PROTO_MAT_PREFIX}${b.customMaterialName}`, name: b.customMaterialName });
+        }
+      });
+    });
+    return result;
+  }, [prototypeBOMs]);
 
   const today = '2026-05-21';
   const [form, setForm] = useState({
@@ -34,21 +52,27 @@ function PurchaseOrderModal({ initialMaterial, onClose, onSave }) {
   });
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
-  const availableSuppliers = form.materialId
-    ? suppliers.filter(s => s.materialIds.includes(form.materialId))
-    : suppliers;
+  const isProtoMat = form.materialId.startsWith(PROTO_MAT_PREFIX);
+  // 試作用は仕入先制限なし（マスタに materialIds 登録がないため）
+  const availableSuppliers = (!form.materialId || isProtoMat)
+    ? suppliers
+    : suppliers.filter(s => s.materialIds.includes(form.materialId));
   const selectedMat = materials.find(m => m.id === form.materialId);
 
   const handleSave = () => {
     if (!form.materialId || !form.supplierId || !form.orderedQty) return;
     const sup = suppliers.find(s => s.id === form.supplierId);
+    const matName = isProtoMat
+      ? form.materialId.slice(PROTO_MAT_PREFIX.length)
+      : (selectedMat?.name || form.materialName);
     onSave({
       id: `PO-${Date.now()}`,
       poNumber: `PO-${today.replace(/-/g,'')}-${String(Date.now()).slice(-4)}`,
       supplierId: form.supplierId,
       supplierName: sup?.name || '',
       materialId: form.materialId,
-      materialName: selectedMat?.name || form.materialName,
+      materialName: matName,
+      isPrototypeMaterial: isProtoMat,
       unit: 'kg',
       orderedQty: Number(form.orderedQty),
       unitPrice: Number(form.unitPrice),
@@ -75,13 +99,14 @@ function PurchaseOrderModal({ initialMaterial, onClose, onSave }) {
               <label className="block text-xs text-slate-500 mb-1">原材料 *</label>
               <select className="input-field text-sm" value={form.materialId}
                 onChange={e => {
-                  const m = materials.find(x => x.id === e.target.value);
-                  const cfg2 = materialReorderConfig[e.target.value];
+                  const val = e.target.value;
+                  const m = materials.find(x => x.id === val);
+                  const cfg2 = materialReorderConfig[val];
                   const sup2 = cfg2 ? suppliers.find(s => s.id === cfg2.defaultSupplierId) : null;
                   setForm(f => ({
                     ...f,
-                    materialId: e.target.value,
-                    materialName: m?.name || '',
+                    materialId: val,
+                    materialName: m?.name || (val.startsWith(PROTO_MAT_PREFIX) ? val.slice(PROTO_MAT_PREFIX.length) : ''),
                     unitPrice: m?.standardPrice || '',
                     orderedQty: cfg2?.orderLot || '',
                     supplierId: sup2?.id || '',
@@ -90,7 +115,21 @@ function PurchaseOrderModal({ initialMaterial, onClose, onSave }) {
                 }}>
                 <option value="">— 選択 —</option>
                 {materials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                {protoMaterials.length > 0 && (
+                  <>
+                    <option disabled>──── 試作品用原材料 ────</option>
+                    {protoMaterials.map(m => (
+                      <option key={m.id} value={m.id}>【試作用】{m.name}</option>
+                    ))}
+                  </>
+                )}
               </select>
+              {isProtoMat && (
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="inline-block px-1.5 py-0 bg-amber-100 text-amber-700 border border-amber-300 rounded text-xs font-semibold leading-5">試作用</span>
+                  <span className="text-xs text-slate-500">試作品用原材料のため仕入先制限なし</span>
+                </div>
+              )}
             </div>
             <div className="col-span-2">
               <label className="block text-xs text-slate-500 mb-1">仕入先 *</label>
@@ -724,7 +763,12 @@ export default function MaterialProcurement() {
                     <div key={po.id} className="px-4 py-3 flex items-center gap-3 flex-wrap">
                       <div className="font-mono text-xs font-bold text-slate-600 w-28">{po.poNumber}</div>
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium">{po.materialName}</div>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-sm font-medium">{po.materialName}</span>
+                          {po.isPrototypeMaterial && (
+                            <span className="inline-block px-1.5 py-0 bg-amber-100 text-amber-700 border border-amber-300 rounded text-xs font-semibold leading-5">試作用</span>
+                          )}
+                        </div>
                         <div className="text-xs text-slate-400">
                           {po.orderedQty}kg × ¥{po.unitPrice.toLocaleString()} = ¥{po.totalAmount.toLocaleString()}
                         </div>
@@ -795,7 +839,14 @@ export default function MaterialProcurement() {
                         }
                       </td>
                       <td className="py-3 px-4 font-mono text-xs">{r.poNumber}</td>
-                      <td className="py-3 px-4 font-medium text-sm">{r.materialName}</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-medium text-sm">{r.materialName}</span>
+                          {r.isPrototypeMaterial && (
+                            <span className="inline-block px-1.5 py-0 bg-amber-100 text-amber-700 border border-amber-300 rounded text-xs font-semibold leading-5">試作用</span>
+                          )}
+                        </div>
+                      </td>
                       <td className="py-3 px-4 text-xs font-mono">{r.orderedQty}kg</td>
                       <td className="py-3 px-4 text-xs text-slate-600">{po?.supplierName || '—'}</td>
                       <td className="py-3 px-4">
