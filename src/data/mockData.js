@@ -13,21 +13,21 @@ export const INITIAL_PRODUCTION_SCHEDULE = {
 };
 
 export const customers = [
-  { id:'C001', code:'C001', name:'FDC株式会社',                   contact:'鈴木 部長',   billingCycle:'月末',     shippingMethod:'FAX',          labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' },
-  { id:'C002', code:'C002', name:'三菱電機株式会社',               contact:'田中 係長',   billingCycle:'15日',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' },
-  { id:'C003', code:'C003', name:'豊田自動織機',                   contact:'加藤 担当',   billingCycle:'20日',     shippingMethod:'メール',        labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' },
-  { id:'C004', code:'C004', name:'ヤマハ発動機株式会社',           contact:'渡辺 部長',   billingCycle:'都度請求', shippingMethod:'紙',            labelFormat:'標準',          customerCodeOnLabel:true,  dataTransmission:'PDF' },
-  { id:'C005', code:'C005', name:'富士電機株式会社',               contact:'中村 係長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF' },
-  { id:'C006', code:'C006', name:'パナソニック株式会社',           contact:'山本 部長',   billingCycle:'月末',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' },
-  { id:'C007', code:'C007', name:'日立製作所',                     contact:'佐々木 係長', billingCycle:'15日',     shippingMethod:'EDI',          labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'EDI' },
-  { id:'C008', code:'C008', name:'東芝インフラシステムズ株式会社', contact:'木村 担当',   billingCycle:'月末',     shippingMethod:'FAX',          labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' },
-  { id:'C009', code:'C009', name:'川崎重工業株式会社',             contact:'林 部長',     billingCycle:'20日',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF' },
-  { id:'C010', code:'C010', name:'住友電気工業株式会社',           contact:'清水 係長',   billingCycle:'月末',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' },
-  { id:'C011', code:'C011', name:'NEC株式会社',                    contact:'田口 担当',   billingCycle:'15日',     shippingMethod:'システム送付',  labelFormat:'標準',          customerCodeOnLabel:true,  dataTransmission:'EDI' },
-  { id:'C012', code:'C012', name:'富士通株式会社',                 contact:'石田 部長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF' },
-  { id:'C013', code:'C013', name:'ダイキン工業株式会社',           contact:'中島 係長',   billingCycle:'都度請求', shippingMethod:'紙',            labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' },
-  { id:'C014', code:'C014', name:'オムロン株式会社',               contact:'藤本 担当',   billingCycle:'20日',     shippingMethod:'FAX',          labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF' },
-  { id:'C015', code:'C015', name:'安川電機株式会社',               contact:'高橋 部長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'PDF' },
+  { id:'C001', code:'C001', name:'FDC株式会社',                   contact:'鈴木 部長',   billingCycle:'月末',     shippingMethod:'FAX',          labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'売掛', invoiceNumber:'T1234-567890-1', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
+  { id:'C002', code:'C002', name:'三菱電機株式会社',               contact:'田中 係長',   billingCycle:'15日',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' , accountType:'両方', invoiceNumber:'T2345-678901-2', paymentTerms:'15日翌月払い', billingAddress:'本社請求先' },
+  { id:'C003', code:'C003', name:'豊田自動織機',                   contact:'加藤 担当',   billingCycle:'20日',     shippingMethod:'メール',        labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'売掛', invoiceNumber:'T3456-789012-3', paymentTerms:'20日翌月払い', billingAddress:'本社請求先' },
+  { id:'C004', code:'C004', name:'ヤマハ発動機株式会社',           contact:'渡辺 部長',   billingCycle:'都度請求', shippingMethod:'紙',            labelFormat:'標準',          customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'売掛', invoiceNumber:'T4567-890123-4', paymentTerms:'都度払い', billingAddress:'本社請求先' },
+  { id:'C005', code:'C005', name:'富士電機株式会社',               contact:'中村 係長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF', accountType:'売掛', invoiceNumber:'T5678-901234-5', paymentTerms:'月末翌々月払い', billingAddress:'本社請求先' },
+  { id:'C006', code:'C006', name:'パナソニック株式会社',           contact:'山本 部長',   billingCycle:'月末',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' , accountType:'売掛', invoiceNumber:'T6789-012345-6', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
+  { id:'C007', code:'C007', name:'日立製作所',                     contact:'佐々木 係長', billingCycle:'15日',     shippingMethod:'EDI',          labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'EDI', accountType:'売掛', invoiceNumber:'T7890-123456-7', paymentTerms:'15日翌月払い', billingAddress:'本社請求先' },
+  { id:'C008', code:'C008', name:'東芝インフラシステムズ株式会社', contact:'木村 担当',   billingCycle:'月末',     shippingMethod:'FAX',          labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'買掛', invoiceNumber:'T8901-234567-8', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
+  { id:'C009', code:'C009', name:'川崎重工業株式会社',             contact:'林 部長',     billingCycle:'20日',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF', accountType:'売掛', invoiceNumber:'T9012-345678-9', paymentTerms:'20日翌月払い', billingAddress:'本社請求先' },
+  { id:'C010', code:'C010', name:'住友電気工業株式会社',           contact:'清水 係長',   billingCycle:'月末',     shippingMethod:'EDI',          labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'EDI' , accountType:'両方', invoiceNumber:'T0123-456789-0', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
+  { id:'C011', code:'C011', name:'NEC株式会社',                    contact:'田口 担当',   billingCycle:'15日',     shippingMethod:'システム送付',  labelFormat:'標準',          customerCodeOnLabel:true,  dataTransmission:'EDI' , accountType:'売掛', invoiceNumber:'T1122-334455-1', paymentTerms:'15日翌月払い', billingAddress:'本社請求先' },
+  { id:'C012', code:'C012', name:'富士通株式会社',                 contact:'石田 部長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF', accountType:'売掛', invoiceNumber:'T2233-445566-2', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
+  { id:'C013', code:'C013', name:'ダイキン工業株式会社',           contact:'中島 係長',   billingCycle:'都度請求', shippingMethod:'紙',            labelFormat:'フォーマットA', customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'買掛', invoiceNumber:'T3344-556677-3', paymentTerms:'都度払い', billingAddress:'本社請求先' },
+  { id:'C014', code:'C014', name:'オムロン株式会社',               contact:'藤本 担当',   billingCycle:'20日',     shippingMethod:'FAX',          labelFormat:'標準',          customerCodeOnLabel:false, dataTransmission:'PDF', accountType:'売掛', invoiceNumber:'T4455-667788-4', paymentTerms:'20日翌月払い', billingAddress:'本社請求先' },
+  { id:'C015', code:'C015', name:'安川電機株式会社',               contact:'高橋 部長',   billingCycle:'月末',     shippingMethod:'メール',        labelFormat:'フォーマットB', customerCodeOnLabel:true,  dataTransmission:'PDF' , accountType:'売掛', invoiceNumber:'T5566-778899-5', paymentTerms:'月末翌月払い', billingAddress:'本社請求先' },
 ];
 
 // ─── 静的製品データ P001-P005 ─────────────────────────────────────────────────
@@ -382,7 +382,7 @@ const _staticOrders = [
     productCode:'CV-8-4C-BLK', productId:'P004', productName:'CV 8mm² 4芯 黒シース',
     customerCode:'C001', customerName:'FDC株式会社',
     totalQuantity:3000, unit:'m', finalDeadline:'2026-07-15', arrangementDeadline:'2026-05-22',
-    paidMaterialOffset:'非対象', status:'照会（仮押さえ）', quoteId:null, isTrial:true,
+    paidMaterialOffset:'非対象', status:'未確定', orderType:'試作注文', approvalStatus:'未承認', deliveryAnswerStatus:'納期未回答', quoteId:null, isTrial:true,
     orderDate:'2026-05-10', inputPersonCode:'101', inputPerson:'細野', approverCode:'', approver:'',
     customerOrderNum1:'FDC-2026-0512', customerOrderNum2:'', customerOrderNum3:'',
     customerProductName:'',
@@ -474,9 +474,9 @@ function _mkO(n, status, finalDays, arrangeDays) {
   const fd = _dOff(finalDays);
   const ad = _dOff(arrangeDays);
   const isCompleted = status === '完了';
-  const hasInspection = !isCompleted && status !== '照会（仮押さえ）' && (i % 7 === 3);
+  const hasInspection = !isCompleted && status !== '未確定' && (i % 7 === 3);
   const lStatus = isCompleted ? '出力済'
-    : status === '照会（仮押さえ）' ? '未出力'
+    : status === '未確定' ? '未出力'
     : hasInspection ? '検査待ち'
     : (status === '分納中' || i % 3 === 0) ? '出力可'
     : '未出力';
@@ -506,14 +506,14 @@ const _completedOrders = Array.from({length:100}, (_,i) =>
 
 // 仕掛かり受注 80件（O105-O184）- 2026年先の納期
 const _activeStatuses = [
-  ...Array(5).fill('照会（仮押さえ）'),
+  ...Array(5).fill('未確定'),
   ...Array(20).fill('分納中'),
   ...Array(55).fill('確定'),
 ];
 const _arrangeOffs = [2, 4, 14, 25, 40];
 const _activeOrders = _activeStatuses.map((st, i) => {
   let finalDays, arrangeDays;
-  if (st === '照会（仮押さえ）') {
+  if (st === '未確定') {
     arrangeDays = _arrangeOffs[i];
     finalDays = arrangeDays + 35;
   } else {

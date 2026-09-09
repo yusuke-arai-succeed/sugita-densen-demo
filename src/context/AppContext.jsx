@@ -370,7 +370,7 @@ export function AppProvider({ children }) {
   useEffect(() => { localStorage.setItem('sd_prototypeBOMs',       JSON.stringify(prototypeBOMs));       }, [prototypeBOMs]);
 
   const deadlineAlerts = orders.filter((o) => {
-    if (o.status !== '照会（仮押さえ）') return false;
+    if (o.status !== '未確定' && o.approvalStatus !== '未承認') return false;
     const deadline = new Date(o.arrangementDeadline);
     const diffDays = Math.ceil((deadline - TODAY) / (1000 * 60 * 60 * 24));
     return diffDays <= 3;

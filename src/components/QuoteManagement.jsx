@@ -259,7 +259,7 @@ function OrderFromQuoteModal({ quote, ordersCount, onSubmit, onSkip }) {
       finalDeadline:       form.finalDeadline,
       arrangementDeadline: form.arrangementDeadline,
       paidMaterialOffset:  form.paidMaterialOffset,
-      status:              '照会（仮押さえ）',
+      status:              '未確定',
       quoteId:             quote.id,
       shippingSchedule:    [],
     });

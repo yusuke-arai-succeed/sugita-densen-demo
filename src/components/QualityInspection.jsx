@@ -12,6 +12,14 @@ const STATUS_COLORS = {
   '特採': 'bg-yellow-100 text-yellow-800',
 };
 
+const STATUS_ROW_COLORS = {
+  '合格': 'bg-green-50/60 hover:bg-green-100/60',
+  '未検品': 'hover:bg-slate-50',
+  '検品中': 'bg-blue-50/40 hover:bg-blue-100/40',
+  '否認': 'bg-red-50/60 hover:bg-red-100/60',
+  '特採': 'bg-yellow-50/40 hover:bg-yellow-100/40',
+};
+
 function SortIcon({ field, sortField, sortDir }) {
   if (sortField !== field) return <span className="text-slate-300 ml-0.5">↕</span>;
   return <span className="text-blue-600 ml-0.5">{sortDir === 'asc' ? '↑' : '↓'}</span>;
@@ -29,6 +37,7 @@ export default function QualityInspection() {
   const [sortDir, setSortDir] = useState('desc');
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({});
+  const [readyFilterCustomer, setReadyFilterCustomer] = useState('');
 
   const handleSort = (field) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -60,7 +69,11 @@ export default function QualityInspection() {
     return sortDir === 'asc' ? String(va).localeCompare(String(vb), 'ja') : String(vb).localeCompare(String(va), 'ja');
   });
 
-  const readyItems = inspections.filter(i => i.status === '合格' || i.status === '特採');
+  const allReadyItems = inspections.filter(i => i.status === '合格' || i.status === '特採');
+  const uniqueReadyCustomers = [...new Set(allReadyItems.map(i => i.customer))].sort((a, b) => a.localeCompare(b, 'ja'));
+  const readyItems = readyFilterCustomer
+    ? allReadyItems.filter(i => i.customer === readyFilterCustomer)
+    : allReadyItems;
 
   const startEdit = (item) => {
     setEditingId(item.id);
@@ -153,7 +166,7 @@ export default function QualityInspection() {
                 <input
                   type="text"
                   className="input-field text-sm py-1.5"
-                  placeholder="品名・得意先・設計書No. 検索"
+                  placeholder="品名・得意先・設計書No.・注番 検索"
                   value={filterSearch}
                   onChange={e => setFilterSearch(e.target.value)}
                 />
@@ -216,7 +229,7 @@ export default function QualityInspection() {
                     <tr><td colSpan={15} className="text-center py-8 text-slate-400">該当データなし</td></tr>
                   )}
                   {filtered.map(item => (
-                    <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                    <tr key={item.id} className={`transition-colors ${STATUS_ROW_COLORS[item.status] || 'hover:bg-slate-50'}`}>
                       {editingId === item.id ? (
                         <>
                           <td className={tdClass}>{item.date}</td>
@@ -285,8 +298,19 @@ export default function QualityInspection() {
 
       {tab === 'ready' && (
         <>
-          <div className="flex items-center justify-between">
-            <p className="text-sm text-slate-500">ステータスが「合格」または「特採」の製品を表示しています。</p>
+          <div className="flex items-center gap-3 flex-wrap">
+            <p className="text-sm text-slate-500 mr-auto">ステータスが「合格」または「特採」の製品を表示しています。</p>
+            <select
+              className="select-field text-sm py-1.5 w-44"
+              value={readyFilterCustomer}
+              onChange={e => setReadyFilterCustomer(e.target.value)}
+            >
+              <option value="">得意先 全て</option>
+              {uniqueReadyCustomers.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {readyFilterCustomer && (
+              <span className="text-xs text-slate-400">{readyItems.length}件 / 全{allReadyItems.length}件</span>
+            )}
             <button
               onClick={exportXLS}
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"

@@ -24,6 +24,7 @@ function EquipmentModal({ machine, detail, onClose, onSave }) {
     maxDiameter: detail?.maxDiameter || '',
     status: detail?.status || '稼働中',
     notes: detail?.notes || '',
+    faultInfo: detail?.faultInfo || '',
   });
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const isNew = !machine;
@@ -85,6 +86,12 @@ function EquipmentModal({ machine, detail, onClose, onSave }) {
             <input className="input-field" value={form.notes} onChange={e => set('notes', e.target.value)}
               placeholder="特記事項（例: 小径ケーブル専用）" />
           </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-700 mb-1">故障情報</label>
+            <textarea className="input-field resize-none text-xs" rows={3} value={form.faultInfo}
+              onChange={e => set('faultInfo', e.target.value)}
+              placeholder={'例:\n2026-08-15: モーター過熱により緊急停止、部品交換済み\n2026-06-03: ベルト摩耗、定期交換'} />
+          </div>
         </div>
         <div className="px-6 py-4 border-t border-slate-200 flex gap-3">
           <button onClick={onClose} className="flex-1 btn-secondary">キャンセル</button>
@@ -143,6 +150,7 @@ export default function EquipmentMaster() {
         machineType: form.machineType || '',
         status: form.status,
         notes: form.notes,
+        faultInfo: form.faultInfo || '',
       },
     }));
     setShowModal(false);
@@ -202,7 +210,7 @@ export default function EquipmentMaster() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                {['設備ID', '工程', '機械種別', '能力(m/h)', '設置年', '最大径(mm)', 'ステータス', '備考', '操作'].map(h => (
+                {['設備ID', '工程', '機械種別', '能力(m/h)', '設置年', '最大径(mm)', 'ステータス', '故障情報', '備考', '操作'].map(h => (
                   <th key={h} className="text-left py-3 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -228,7 +236,14 @@ export default function EquipmentMaster() {
                     <td className="py-3 px-4">
                       <span className={`badge text-xs ${statusColor[status] || 'bg-slate-100 text-slate-500'}`}>{status}</span>
                     </td>
-                    <td className="py-3 px-4 text-xs text-slate-500 max-w-[200px] truncate">{d.notes || '—'}</td>
+                    <td className="py-3 px-4 text-xs max-w-[180px]">
+                      {d.faultInfo ? (
+                        <span className="text-orange-700 truncate block" title={d.faultInfo}>
+                          ⚠ {d.faultInfo.split('\n')[0]}
+                        </span>
+                      ) : <span className="text-slate-300">—</span>}
+                    </td>
+                    <td className="py-3 px-4 text-xs text-slate-500 max-w-[160px] truncate">{d.notes || '—'}</td>
                     <td className="py-3 px-4">
                       <button
                         onClick={() => { setEditTarget(m); setShowModal(true); }}

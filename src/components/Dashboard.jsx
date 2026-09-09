@@ -17,7 +17,7 @@ function StatusBadge({ status }) {
   const map = {
     '確定': 'bg-blue-100 text-blue-700',
     '分納中': 'bg-yellow-100 text-yellow-700',
-    '照会（仮押さえ）': 'bg-orange-100 text-orange-700',
+    '未確定': 'bg-orange-100 text-orange-700',
     '完了': 'bg-green-100 text-green-700',
     '進行中': 'bg-blue-100 text-blue-700',
     '未着手': 'bg-slate-100 text-slate-500',
@@ -33,7 +33,7 @@ export default function Dashboard() {
           delayAlerts, currentStock, materialReorderConfig, techRequests } = useApp();
 
   const confirmedOrders = orders.filter(o => ['確定', '分納中'].includes(o.status)).length;
-  const tentativeOrders = orders.filter(o => o.status === '照会（仮押さえ）').length;
+  const tentativeOrders = orders.filter(o => o.status === '未確定').length;
   const inProgressMfg = mfgOrders.filter(m => m.status === '進行中').length;
   const completedMfg = mfgOrders.filter(m => m.status === '完了').length;
 
@@ -170,7 +170,7 @@ export default function Dashboard() {
         <KpiCard
           label="受注件数（確定）"
           value={confirmedOrders}
-          sub={`仮押さえ ${tentativeOrders}件含む`}
+          sub={`未確定 ${tentativeOrders}件含む`}
           color="text-blue-700"
           onClick={() => setActiveApp('order')}
         />

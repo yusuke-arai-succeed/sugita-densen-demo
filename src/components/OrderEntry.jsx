@@ -3,11 +3,26 @@ import { useApp } from '../context/AppContext';
 import DocumentOutputModal from './DocumentOutput';
 
 const statusColors = {
-  '照会（仮押さえ）': 'bg-orange-100 text-orange-700',
+  '未確定': 'bg-orange-100 text-orange-700',
   '確定': 'bg-blue-100 text-blue-700',
   '分納中': 'bg-purple-100 text-purple-700',
   '完了': 'bg-green-100 text-green-700',
   'キャンセル': 'bg-red-100 text-red-500',
+};
+const ORDER_TYPES = ['通常注文', '試作注文', '外注依頼品', '在庫引当て品'];
+const ORDER_TYPE_COLORS = {
+  '通常注文':   'bg-blue-50 text-blue-700 border-blue-200',
+  '試作注文':   'bg-amber-50 text-amber-700 border-amber-200',
+  '外注依頼品': 'bg-purple-50 text-purple-700 border-purple-200',
+  '在庫引当て品':'bg-green-50 text-green-700 border-green-200',
+};
+const APPROVAL_COLORS = {
+  '未承認': 'bg-red-50 text-red-600 border-red-200',
+  '承認済': 'bg-green-50 text-green-700 border-green-200',
+};
+const DELIVERY_ANSWER_COLORS = {
+  '納期未回答': 'bg-orange-50 text-orange-600',
+  '納期回答済み': 'bg-green-50 text-green-700',
 };
 const shipStatusColors = {
   '未出荷': 'bg-slate-100 text-slate-600',
@@ -158,12 +173,13 @@ function ComboInput({ value, onChange, onSelect, options, placeholder, className
 }
 
 // ─── 受注入力モーダル ────────────────────────────────────────────────────────
-function NewOrderModal({ onClose, onSave }) {
+function NewOrderModal({ onClose, onSave, initialDraft, onSaveDraft }) {
   const { products, customers, copperPrice, prototypes, prototypeBOMs, addBOMEntry } = useApp();
 
-  const [form, setForm] = useState({
-    isTrial: false,
-    orderDate: '2026-05-21', status: '照会（仮押さえ）', paidMaterialOffset: '非対象',
+  const [form, setForm] = useState(initialDraft || {
+    orderType: '通常注文',
+    orderDate: '2026-05-21', status: '未確定', paidMaterialOffset: '非対象',
+    approvalStatus: '未承認', deliveryAnswerStatus: '納期未回答',
     inputPersonCode: '101', inputPerson: '細野', approverCode: '', approver: '',
     customerCode: '', customerName: '',
     deliveryAddressCode: '', deliveryAddressName: '', deliveryAddressDetail: '',
@@ -173,7 +189,7 @@ function NewOrderModal({ onClose, onSave }) {
     cableEntries: [{ cableLength: '', bundleCount: '' }],
     packaging: 'ドラム(D400)', weightPer1000m: '',
     unit: 'm', totalQuantity: '', finalDeadline: '', arrangementDeadline: '',
-    sampleRequired: false, trRequired: false, ulLabel: false,
+    sampleInternalLength: '', sampleCustomerLength: '', trRequired: false, ulLabel: false,
     cableSupply: false, cableArrivalDate: '', materialSupply: false, drumSupply: false, tagSupply: false,
     copperBase: copperPrice, priceCategory: 'A', unitPrice: '',
     completionStatus: '0', remarks: '',
@@ -190,6 +206,7 @@ function NewOrderModal({ onClose, onSave }) {
       productName: p?.name || '',
       designNumber: p?.designNumber || f.designNumber,
       unit: p?.unit || f.unit,
+      weightPer1000m: p?.weightPer1000m ? String(p.weightPer1000m) : f.weightPer1000m,
     }));
   };
 
@@ -221,12 +238,14 @@ function NewOrderModal({ onClose, onSave }) {
 
   const handleSave = () => {
     const seq = String(Math.floor(Math.random()*9000)+1000);
-    const prefix = form.isTrial ? 'TMP' : 'SO';
+    const isTrial = form.orderType === '試作注文';
+    const prefix = isTrial ? 'TMP' : 'SO';
     const newOrder = {
       id: `O${Date.now()}`,
       orderNumber: `${prefix}-${form.orderDate.replace(/-/g,'').slice(2,6)}-${seq}`,
       quoteId: null,
       shippingSchedule: [],
+      isTrial,
       ...form,
     };
     onSave(newOrder);
@@ -242,13 +261,10 @@ function NewOrderModal({ onClose, onSave }) {
         <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 flex-shrink-0">
           <div className="flex items-center gap-3">
             <h2 className="font-bold text-slate-800 text-lg">受注入力</h2>
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input type="checkbox" checked={form.isTrial} onChange={e => set('isTrial', e.target.checked)}
-                className="w-4 h-4 rounded border-slate-300 accent-amber-500" />
-              <span className={`text-sm font-semibold px-2 py-0.5 rounded ${form.isTrial ? 'bg-amber-100 text-amber-700' : 'text-slate-500'}`}>
-                試作受注
-              </span>
-            </label>
+            <select value={form.orderType} onChange={e => set('orderType', e.target.value)}
+              className={`text-sm font-semibold px-3 py-1 rounded-lg border ${ORDER_TYPE_COLORS[form.orderType] || 'bg-slate-100 text-slate-700 border-slate-200'}`}>
+              {ORDER_TYPES.map(t => <option key={t}>{t}</option>)}
+            </select>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
         </div>
@@ -257,8 +273,10 @@ function NewOrderModal({ onClose, onSave }) {
           <Sec title="基本情報">
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div><Lbl t="受注日" req /><input type="date" value={form.orderDate} onChange={e=>set('orderDate',e.target.value)} className="input-field" /></div>
-              <div><Lbl t="ステータス" /><select value={form.status} onChange={e=>set('status',e.target.value)} className="select-field">{Object.keys(statusColors).map(s=><option key={s}>{s}</option>)}</select></div>
-              <div><Lbl t="有償支給材相殺" /><select value={form.paidMaterialOffset} onChange={e=>set('paidMaterialOffset',e.target.value)} className="select-field"><option>非対象</option><option>対象</option></select></div>
+              <div><Lbl t="受注ステータス" /><select value={form.status} onChange={e=>set('status',e.target.value)} className="select-field">{Object.keys(statusColors).map(s=><option key={s}>{s}</option>)}</select></div>
+              <div><Lbl t="承認ステータス" /><select value={form.approvalStatus} onChange={e=>set('approvalStatus',e.target.value)} className="select-field"><option>未承認</option><option>承認済</option></select></div>
+              <div><Lbl t="納期回答" /><select value={form.deliveryAnswerStatus} onChange={e=>set('deliveryAnswerStatus',e.target.value)} className="select-field"><option>納期未回答</option><option>納期回答済み</option></select></div>
+              <div><Lbl t="有償支給の有無" /><select value={form.paidMaterialOffset} onChange={e=>set('paidMaterialOffset',e.target.value)} className="select-field"><option>非対象</option><option>有償支給あり</option></select></div>
               <div><Lbl t="入力者コード" /><input type="text" value={form.inputPersonCode} onChange={e=>set('inputPersonCode',e.target.value)} className="input-field" placeholder="例: 101" /></div>
               <div><Lbl t="入力者" /><input type="text" value={form.inputPerson} onChange={e=>set('inputPerson',e.target.value)} className="input-field" placeholder="コード入力で自動表示" /></div>
               <div><Lbl t="承認者コード" /><input type="text" value={form.approverCode} onChange={e=>set('approverCode',e.target.value)} className="input-field" placeholder="例: 001" /></div>
@@ -302,8 +320,8 @@ function NewOrderModal({ onClose, onSave }) {
             </div>
           </Sec>
 
-          <Sec title={form.isTrial ? '試作品情報' : '商品情報'}>
-            {form.isTrial ? (
+          <Sec title={form.orderType === '試作注文' ? '試作品情報' : '商品情報'}>
+            {form.orderType === '試作注文' ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 <div>
                   <Lbl t="試作品コード" req />
@@ -369,8 +387,27 @@ function NewOrderModal({ onClose, onSave }) {
           </Sec>
 
           <Sec title="提出書類・支給材">
+            <div className="mb-3">
+              <p className="text-xs font-medium text-slate-500 mb-2">サンプル・TR提出</p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-slate-50 rounded-lg p-3">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-slate-700 w-20 flex-shrink-0">社内用</label>
+                  <input type="number" value={form.sampleInternalLength} onChange={e=>set('sampleInternalLength',e.target.value)}
+                    className="input-field" placeholder="条長 m（0=不要）" />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-slate-700 w-20 flex-shrink-0">客先用</label>
+                  <input type="number" value={form.sampleCustomerLength} onChange={e=>set('sampleCustomerLength',e.target.value)}
+                    className="input-field" placeholder="条長 m（0=不要）" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={form.trRequired} onChange={e=>set('trRequired',e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
+                  <span className="text-sm text-slate-700">TR提出（製品・材料）</span>
+                </label>
+              </div>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mb-3">
-              {[['sampleRequired','サンプル提出'],['trRequired','TR提出（製品・材料）'],['ulLabel','ULラベル'],['materialSupply','材料支給'],['drumSupply','ドラム支給'],['tagSupply','荷札支給']].map(([k,l])=>(
+              {[['ulLabel','ULラベル'],['materialSupply','材料支給'],['drumSupply','ドラム支給'],['tagSupply','荷札支給']].map(([k,l])=>(
                 <label key={k} className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={form[k]} onChange={e=>set(k,e.target.checked)} className="w-4 h-4 rounded border-slate-300" />
                   <span className="text-sm text-slate-700">{l}</span>
@@ -411,8 +448,12 @@ function NewOrderModal({ onClose, onSave }) {
 
         <div className="px-6 py-4 border-t border-slate-200 flex gap-3 justify-end flex-shrink-0 bg-white">
           <button onClick={onClose} className="btn-secondary px-6">キャンセル</button>
+          <button onClick={() => { onSaveDraft?.(form); onClose(); }}
+            className="btn-secondary px-4 text-amber-700 border-amber-300 hover:bg-amber-50">
+            📋 下書き保存
+          </button>
           <button onClick={handleSave}
-            disabled={!form.customerCode || (!form.isTrial && !form.productCode) || !form.totalQuantity || !form.finalDeadline}
+            disabled={!form.customerCode || (form.orderType !== '試作注文' && !form.productCode) || !form.totalQuantity || !form.finalDeadline}
             className="btn-primary px-6 disabled:opacity-40 disabled:cursor-not-allowed">
             受注登録
           </button>
@@ -445,10 +486,11 @@ function FlagBadge({ active, label }) {
 }
 
 // ─── 受注詳細モーダル ────────────────────────────────────────────────────────
-function OrderDetailModal({ selected, onClose, onConfirm, deadlineAlerts, TODAY,
+function OrderDetailModal({ selected, onClose, onConfirm, onApprove, deadlineAlerts, TODAY,
   editingId, editForm, setEditForm, startEdit, cancelEdit, saveEdit,
   showNewShipping, setShowNewShipping, newShipping, setNewShipping, addShipping,
-  handleDeleteShipping, deleteTarget, confirmDelete, setDeleteTarget
+  handleDeleteShipping, deleteTarget, confirmDelete, setDeleteTarget,
+  markShipped
 }) {
   const [detailTab, setDetailTab] = useState('basic');
   const [showDocOutput, setShowDocOutput] = useState(false);
@@ -464,24 +506,36 @@ function OrderDetailModal({ selected, onClose, onConfirm, deadlineAlerts, TODAY,
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white z-10 rounded-t-xl">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 flex-wrap">
-              {selected.isTrial && (
+              {selected.orderType && (
+                <span className={`badge border font-bold ${ORDER_TYPE_COLORS[selected.orderType] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selected.orderType}</span>
+              )}
+              {selected.isTrial && !selected.orderType && (
                 <span className="badge bg-amber-100 text-amber-700 border border-amber-300 font-bold">試作</span>
               )}
               <h2 className="text-base font-bold text-slate-800">{selected.orderNumber}</h2>
               <span className={`badge ${statusColors[selected.status]}`}>{selected.status}</span>
+              {selected.approvalStatus && (
+                <span className={`badge border text-xs ${APPROVAL_COLORS[selected.approvalStatus] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{selected.approvalStatus}</span>
+              )}
+              {selected.deliveryAnswerStatus && (
+                <span className={`badge text-xs ${DELIVERY_ANSWER_COLORS[selected.deliveryAnswerStatus] || ''}`}>{selected.deliveryAnswerStatus}</span>
+              )}
               {selected.priceCategory && (
                 <span className={`badge ${PRICE_CAT_COLORS[selected.priceCategory] || 'bg-slate-100 text-slate-600'}`}>
                   {selected.priceCategory === 'K' ? '仮単価' : selected.priceCategory === 'T' ? '一括単価' : '決定単価'}
                 </span>
               )}
-              {selected.paidMaterialOffset === '対象' && (
-                <span className="badge bg-purple-100 text-purple-700">有償支給材 相殺対象</span>
+              {(selected.paidMaterialOffset === '対象' || selected.paidMaterialOffset === '有償支給あり') && (
+                <span className="badge bg-purple-100 text-purple-700">有償支給あり</span>
               )}
             </div>
             <div className="text-xs text-slate-500 mt-0.5 truncate">{selected.productName} / {selected.customerName}</div>
           </div>
           <div className="flex items-center gap-2 ml-4 flex-shrink-0">
-            {selected.status === '照会（仮押さえ）' && (
+            {selected.approvalStatus === '未承認' && (
+              <button onClick={() => onApprove(selected.id)} className="btn-primary text-xs px-3 py-1.5 bg-green-700 hover:bg-green-800">承認する</button>
+            )}
+            {selected.status === '未確定' && selected.approvalStatus === '承認済' && (
               <button onClick={() => onConfirm(selected.id)} className="btn-primary text-xs px-3 py-1.5">受注確定</button>
             )}
             <button onClick={() => setShowDocOutput(true)}
@@ -515,7 +569,9 @@ function OrderDetailModal({ selected, onClose, onConfirm, deadlineAlerts, TODAY,
                 <DField label="入力者" value={selected.inputPerson ? `${selected.inputPersonCode} ${selected.inputPerson}` : undefined} />
                 <DField label="承認者" value={selected.approver ? `${selected.approverCode} ${selected.approver}` : undefined} />
                 <DField label="完納区分" value={selected.completionStatus === '1' ? '1：完納' : selected.completionStatus === '0' ? '0：未完納' : undefined} />
-                <DField label="有償支給材相殺" value={selected.paidMaterialOffset} />
+                <DField label="有償支給の有無" value={selected.paidMaterialOffset} />
+                <DField label="承認ステータス" value={selected.approvalStatus} />
+                <DField label="納期回答" value={selected.deliveryAnswerStatus} />
               </div>
               <div>
                 <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">得意先・納入先</p>
@@ -587,9 +643,18 @@ function OrderDetailModal({ selected, onClose, onConfirm, deadlineAlerts, TODAY,
           {detailTab === 'supply' && (
             <div className="space-y-4 mb-4">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">提出書類</p>
+                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">提出書類・サンプル</p>
                 <div className="flex flex-wrap gap-2">
-                  <FlagBadge active={selected.sampleRequired} label="サンプル提出" />
+                  {(selected.sampleInternalLength > 0 || selected.sampleRequired) && (
+                    <span className="badge bg-blue-50 text-blue-700 border border-blue-200">
+                      社内用サンプル {selected.sampleInternalLength ? `${selected.sampleInternalLength}m` : ''}
+                    </span>
+                  )}
+                  {selected.sampleCustomerLength > 0 && (
+                    <span className="badge bg-purple-50 text-purple-700 border border-purple-200">
+                      客先用サンプル {selected.sampleCustomerLength}m
+                    </span>
+                  )}
                   <FlagBadge active={selected.trRequired} label="TR提出（製品・材料）" />
                   <FlagBadge active={selected.ulLabel} label="ULラベル" />
                 </div>
@@ -719,10 +784,13 @@ function OrderDetailModal({ selected, onClose, onConfirm, deadlineAlerts, TODAY,
                     <td className="py-2.5 px-3 text-slate-600">{s.carrier}</td>
                     <td className="py-2.5 px-3"><span className={`badge ${shipStatusColors[s.status]}`}>{s.status}</span></td>
                     <td className="py-2.5 px-3">
-                      {s.status !== '出荷済' && !editingId && (
+                      {!editingId && (
                         <div className="flex gap-2">
-                          <button onClick={() => startEdit(s)} className="text-xs text-blue-500 hover:underline">編集</button>
-                          <button onClick={() => handleDeleteShipping(s.id)} className="text-xs text-red-500 hover:underline">削除</button>
+                          {s.status !== '出荷済' && <>
+                            <button onClick={() => startEdit(s)} className="text-xs text-blue-500 hover:underline">編集</button>
+                            <button onClick={() => markShipped(s.id)} className="text-xs text-green-600 hover:underline font-medium">出荷済</button>
+                            <button onClick={() => handleDeleteShipping(s.id)} className="text-xs text-red-500 hover:underline">削除</button>
+                          </>}
                         </div>
                       )}
                     </td>
@@ -763,14 +831,17 @@ export default function OrderEntry() {
   const [showDetailModal, setShowDetailModal]  = useState(false);
   const [viewMode, setViewMode]               = useState('list');
   const [showNewOrder, setShowNewOrder]        = useState(false);
+  const [orderDraft, setOrderDraft]            = useState(null);
 
   // フィルタ・ソート
-  const [filterSearch, setFilterSearch]       = useState('');
-  const [filterStatus, setFilterStatus]       = useState('');
-  const [filterDateFrom, setFilterDateFrom]   = useState('');
-  const [filterDateTo, setFilterDateTo]       = useState('');
-  const [filterTrial, setFilterTrial]         = useState(false);
-  const [sortField, setSortField]             = useState('finalDeadline');
+  const [filterSearch, setFilterSearch]         = useState('');
+  const [filterStatus, setFilterStatus]         = useState('');
+  const [filterOrderType, setFilterOrderType]   = useState('');
+  const [filterApproval, setFilterApproval]     = useState('');
+  const [filterDeliveryAnswer, setFilterDeliveryAnswer] = useState('');
+  const [filterDateFrom, setFilterDateFrom]     = useState('');
+  const [filterDateTo, setFilterDateTo]         = useState('');
+  const [sortField, setSortField]               = useState('finalDeadline');
   const [sortDir, setSortDir]                 = useState('asc');
 
   // 出荷予定編集ステート
@@ -791,20 +862,27 @@ export default function OrderEntry() {
       result = result.filter(o =>
         (o.orderNumber||'').toLowerCase().includes(q) ||
         (o.productName||'').toLowerCase().includes(q) ||
-        (o.customerName||'').toLowerCase().includes(q)
+        (o.customerName||'').toLowerCase().includes(q) ||
+        (o.productCode||'').toLowerCase().includes(q)
       );
     }
     if (filterStatus) {
       result = result.filter(o => o.status === filterStatus);
+    }
+    if (filterOrderType) {
+      result = result.filter(o => (o.orderType || (o.isTrial ? '試作注文' : '通常注文')) === filterOrderType);
+    }
+    if (filterApproval) {
+      result = result.filter(o => o.approvalStatus === filterApproval);
+    }
+    if (filterDeliveryAnswer) {
+      result = result.filter(o => o.deliveryAnswerStatus === filterDeliveryAnswer);
     }
     if (filterDateFrom) {
       result = result.filter(o => o.finalDeadline && o.finalDeadline >= filterDateFrom);
     }
     if (filterDateTo) {
       result = result.filter(o => o.finalDeadline && o.finalDeadline <= filterDateTo);
-    }
-    if (filterTrial) {
-      result = result.filter(o => o.isTrial === true);
     }
 
     result.sort((a, b) => {
@@ -855,6 +933,29 @@ export default function OrderEntry() {
     if (selected?.id === orderId) setSelected(s => ({ ...s, status: '確定' }));
   };
 
+  const handleApproveOrder = (orderId) => {
+    setOrders(os => os.map(o => o.id === orderId ? { ...o, approvalStatus: '承認済' } : o));
+    if (selected?.id === orderId) setSelected(s => ({ ...s, approvalStatus: '承認済' }));
+  };
+
+  const markShipped = (scheduleId) => {
+    const updated = {
+      ...selected,
+      shippingSchedule: selected.shippingSchedule.map(s =>
+        s.id === scheduleId ? { ...s, status: '出荷済' } : s
+      ),
+    };
+    const allShipped = updated.shippingSchedule.every(s => s.status === '出荷済');
+    if (allShipped) {
+      updated.completionStatus = '1';
+      updated.status = '完了';
+    } else if (updated.shippingSchedule.some(s => s.status === '出荷済')) {
+      updated.status = '分納中';
+    }
+    setOrders(os => os.map(o => o.id === selected.id ? updated : o));
+    setSelected(updated);
+  };
+
   const startEdit = (s) => {
     setEditingId(s.id);
     setEditForm({ scheduledDate: s.scheduledDate, quantity: String(s.quantity), carrier: s.carrier });
@@ -902,7 +1003,7 @@ export default function OrderEntry() {
     </th>
   );
 
-  const hasFilter = filterSearch || filterStatus || filterDateFrom || filterDateTo || filterTrial;
+  const hasFilter = filterSearch || filterStatus || filterOrderType || filterApproval || filterDeliveryAnswer || filterDateFrom || filterDateTo;
 
   return (
     <div className="space-y-4">
@@ -945,17 +1046,61 @@ export default function OrderEntry() {
         <div className="space-y-3">
           {/* フィルタバー */}
           <div className="card py-2.5 px-4">
-            <div className="flex items-center gap-2 overflow-x-auto">
+            <div className="flex justify-end mb-2">
+              <button onClick={() => {
+                const rows = filteredOrders.filter(o => o.status !== '完了' && o.status !== 'キャンセル');
+                const tsv = [
+                  ['受注番号','注文区分','ステータス','承認','納期回答','商品コード','製品名','得意先','数量','単位','納期','手配期限','単価区分'].join('\t'),
+                  ...rows.map(o => [
+                    o.orderNumber, o.orderType || (o.isTrial ? '試作注文' : '通常注文'),
+                    o.status, o.approvalStatus || '', o.deliveryAnswerStatus || '',
+                    o.productCode || '', o.productName || '', o.customerName || '',
+                    o.totalQuantity || '', o.unit || 'm',
+                    o.finalDeadline || '', o.arrangementDeadline || '', o.priceCategory || ''
+                  ].join('\t'))
+                ].join('\n');
+                const blob = new Blob(['﻿' + tsv], { type: 'text/tab-separated-values;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url; a.download = `受注残一覧_${new Date().toISOString().slice(0,10)}.tsv`; a.click();
+                URL.revokeObjectURL(url);
+              }} className="btn-secondary text-xs py-1.5 px-3">
+                📥 受注残CSV出力（{filteredOrders.filter(o=>o.status!=='完了'&&o.status!=='キャンセル').length}件）
+              </button>
+            </div>
+            <div className="flex items-center gap-2 overflow-x-auto flex-wrap">
               <div className="w-52 flex-shrink-0">
                 <input type="text" value={filterSearch} onChange={e => setFilterSearch(e.target.value)}
-                  placeholder="受注番号・製品名・得意先で検索…"
+                  placeholder="受注番号・商品コード・製品名・得意先…"
                   className="input-field text-sm py-1.5" />
               </div>
-              <div className="w-36 flex-shrink-0">
+              <div className="w-32 flex-shrink-0">
+                <select value={filterOrderType} onChange={e => setFilterOrderType(e.target.value)}
+                  className="select-field text-sm py-1.5">
+                  <option value="">全注文区分</option>
+                  {ORDER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+              <div className="w-32 flex-shrink-0">
                 <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
                   className="select-field text-sm py-1.5">
                   <option value="">全ステータス</option>
                   {Object.keys(statusColors).map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="w-28 flex-shrink-0">
+                <select value={filterApproval} onChange={e => setFilterApproval(e.target.value)}
+                  className="select-field text-sm py-1.5">
+                  <option value="">全承認</option>
+                  <option value="未承認">未承認</option>
+                  <option value="承認済">承認済</option>
+                </select>
+              </div>
+              <div className="w-32 flex-shrink-0">
+                <select value={filterDeliveryAnswer} onChange={e => setFilterDeliveryAnswer(e.target.value)}
+                  className="select-field text-sm py-1.5">
+                  <option value="">全納期回答</option>
+                  <option value="納期未回答">納期未回答</option>
+                  <option value="納期回答済み">納期回答済み</option>
                 </select>
               </div>
               <span className="text-xs text-slate-500 flex-shrink-0 whitespace-nowrap">納期</span>
@@ -968,13 +1113,8 @@ export default function OrderEntry() {
                 <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)}
                   className="input-field text-sm py-1.5" />
               </div>
-              <label className="flex items-center gap-1.5 cursor-pointer select-none flex-shrink-0 whitespace-nowrap">
-                <input type="checkbox" checked={filterTrial} onChange={e => setFilterTrial(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-300 accent-amber-500" />
-                <span className={`text-sm font-medium ${filterTrial ? 'text-amber-700' : 'text-slate-600'}`}>試作のみ</span>
-              </label>
               {hasFilter && (
-                <button onClick={() => { setFilterSearch(''); setFilterStatus(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterTrial(false); }}
+                <button onClick={() => { setFilterSearch(''); setFilterStatus(''); setFilterOrderType(''); setFilterApproval(''); setFilterDeliveryAnswer(''); setFilterDateFrom(''); setFilterDateTo(''); }}
                   className="text-xs text-slate-500 hover:text-slate-700 underline flex-shrink-0 whitespace-nowrap">
                   クリア
                 </button>
@@ -987,18 +1127,21 @@ export default function OrderEntry() {
 
           {/* 受注一覧テーブル */}
           <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '60vh' }}>
               <table className="min-w-full text-sm">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <TH field="orderNumber" label="受注番号" />
+                    <TH field="orderType" label="注文区分" />
                     <TH field="status" label="ステータス" />
+                    <TH field="approvalStatus" label="承認" />
+                    <TH field="deliveryAnswerStatus" label="納期回答" />
                     <TH field="productName" label="製品名" className="min-w-[160px]" />
                     <TH field="customerName" label="得意先" />
                     <TH field="totalQuantity" label="数量" />
                     <TH field="finalDeadline" label="納期" />
                     <TH field="arrangementDeadline" label="手配期限" />
-                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">区分</th>
+                    <th className="px-3 py-3 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">単価区分</th>
                     <th className="px-3 py-3 text-center text-xs font-semibold text-slate-600">詳細</th>
                   </tr>
                 </thead>
@@ -1016,13 +1159,29 @@ export default function OrderEntry() {
                         }`}>
                         <td className="py-3 px-3 font-mono text-xs text-slate-600 whitespace-nowrap">
                           {isAlert && <span className="mr-1 text-red-500">⚠️</span>}
-                          {o.isTrial && <span className="mr-1 inline-block px-1 py-0 bg-amber-100 text-amber-700 rounded text-xs font-semibold" style={{fontSize:'10px'}}>試作</span>}
                           {o.orderNumber}
+                        </td>
+                        <td className="py-3 px-3">
+                          {o.orderType ? (
+                            <span className={`badge border text-xs ${ORDER_TYPE_COLORS[o.orderType] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{o.orderType}</span>
+                          ) : o.isTrial ? (
+                            <span className="badge bg-amber-100 text-amber-700 border border-amber-200 text-xs">試作注文</span>
+                          ) : <span className="badge bg-blue-50 text-blue-700 border border-blue-200 text-xs">通常注文</span>}
                         </td>
                         <td className="py-3 px-3">
                           <span className={`badge ${statusColors[o.status] || 'bg-slate-100 text-slate-600'}`}>
                             {o.status}
                           </span>
+                        </td>
+                        <td className="py-3 px-3">
+                          {o.approvalStatus && (
+                            <span className={`badge border text-xs ${APPROVAL_COLORS[o.approvalStatus] || 'bg-slate-100 text-slate-600 border-slate-200'}`}>{o.approvalStatus}</span>
+                          )}
+                        </td>
+                        <td className="py-3 px-3">
+                          {o.deliveryAnswerStatus && (
+                            <span className={`text-xs font-medium ${DELIVERY_ANSWER_COLORS[o.deliveryAnswerStatus] || 'text-slate-500'}`}>{o.deliveryAnswerStatus}</span>
+                          )}
                         </td>
                         <td className="py-3 px-3 text-slate-800 max-w-[200px]">
                           <div className="truncate">{o.productName}</div>
@@ -1058,7 +1217,7 @@ export default function OrderEntry() {
                   })}
                   {filteredOrders.length === 0 && (
                     <tr>
-                      <td colSpan={9} className="py-16 text-center text-slate-400">
+                      <td colSpan={12} className="py-16 text-center text-slate-400">
                         <div className="text-2xl mb-2">🔍</div>
                         <div className="text-sm">該当する受注データがありません</div>
                         {hasFilter && (
@@ -1081,6 +1240,7 @@ export default function OrderEntry() {
           selected={selected}
           onClose={closeDetail}
           onConfirm={handleConfirmOrder}
+          onApprove={handleApproveOrder}
           deadlineAlerts={deadlineAlerts}
           TODAY={TODAY}
           editingId={editingId}
@@ -1098,10 +1258,18 @@ export default function OrderEntry() {
           deleteTarget={deleteTarget}
           confirmDelete={confirmDelete}
           setDeleteTarget={setDeleteTarget}
+          markShipped={markShipped}
         />
       )}
 
-      {showNewOrder && <NewOrderModal onClose={()=>setShowNewOrder(false)} onSave={handleSaveNewOrder} />}
+      {orderDraft && !showNewOrder && (
+        <div className="fixed bottom-4 right-4 z-40 bg-amber-50 border border-amber-300 rounded-xl shadow-lg px-4 py-3 flex items-center gap-3">
+          <span className="text-amber-700 text-sm font-medium">📋 受注入力の下書きがあります</span>
+          <button onClick={() => setShowNewOrder(true)} className="btn-primary text-xs py-1.5 px-3 bg-amber-600 hover:bg-amber-700">続きを入力</button>
+          <button onClick={() => setOrderDraft(null)} className="text-amber-500 hover:text-amber-700 text-xs underline">破棄</button>
+        </div>
+      )}
+      {showNewOrder && <NewOrderModal onClose={()=>setShowNewOrder(false)} onSave={handleSaveNewOrder} initialDraft={orderDraft} onSaveDraft={d => { setOrderDraft(d); }} />}
     </div>
   );
 }

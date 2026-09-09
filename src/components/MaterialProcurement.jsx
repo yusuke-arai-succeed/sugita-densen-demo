@@ -497,7 +497,7 @@ export default function MaterialProcurement() {
 
   // 活性オーダー（未完了）
   const activeOrders = orders.filter(o =>
-    ['確定','照会（仮押さえ）','分納中'].includes(o.status)
+    ['確定','未確定','分納中'].includes(o.status)
   );
 
   // 引当状況サマリ
@@ -577,6 +577,8 @@ export default function MaterialProcurement() {
     });
   }, [materials, currentStock, materialAllocations, materialReorderConfig, purchaseOrders]);
 
+  const [scheduleSearch, setScheduleSearch] = useState('');
+
   // 入庫予定（スケジュール）
   const receivingSchedule = useMemo(() => {
     return [...materialReceiving]
@@ -587,6 +589,15 @@ export default function MaterialProcurement() {
         return a.scheduledDate.localeCompare(b.scheduledDate);
       });
   }, [materialReceiving]);
+
+  const filteredSchedule = useMemo(() => {
+    if (!scheduleSearch) return receivingSchedule;
+    const q = scheduleSearch.toLowerCase();
+    return receivingSchedule.filter(r =>
+      r.materialName?.toLowerCase().includes(q) ||
+      r.poNumber?.toLowerCase().includes(q)
+    );
+  }, [receivingSchedule, scheduleSearch]);
 
   const tabs = [
     { id: 'allocation', label: '📦 引当管理' },
@@ -692,9 +703,9 @@ export default function MaterialProcurement() {
 
           {/* 引当詳細 */}
           <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '55vh' }}>
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     {['受注番号','製品名','材料名','必要量','引当済','不足','ステータス'].map(h => (
                       <th key={h} className="text-left py-2 px-3 text-xs font-medium text-slate-500 whitespace-nowrap">{h}</th>
@@ -809,10 +820,25 @@ export default function MaterialProcurement() {
 
       {/* ── 入庫予定タブ ── */}
       {activeTab === 'schedule' && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <input
+              type="text"
+              className="input-field max-w-xs text-sm"
+              placeholder="材料名・発注番号で検索"
+              value={scheduleSearch}
+              onChange={e => setScheduleSearch(e.target.value)}
+            />
+            {scheduleSearch && (
+              <button onClick={() => setScheduleSearch('')}
+                className="text-xs text-slate-400 hover:text-red-500">クリア</button>
+            )}
+            <span className="ml-auto text-xs text-slate-400">{filteredSchedule.length}件 / 全{receivingSchedule.length}件</span>
+          </div>
         <div className="card p-0 overflow-hidden">
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '55vh' }}>
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 border-b border-slate-200">
+              <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                 <tr>
                   {['入庫予定日','発注番号','材料名','発注量','仕入先','ステータス'].map(h => (
                     <th key={h} className="text-left py-2 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">{h}</th>
@@ -820,7 +846,7 @@ export default function MaterialProcurement() {
                 </tr>
               </thead>
               <tbody>
-                {receivingSchedule.map(r => {
+                {filteredSchedule.map(r => {
                   const po = purchaseOrders.find(p => p.id === r.purchaseOrderId);
                   const daysLeft = r.scheduledDate
                     ? Math.ceil((new Date(r.scheduledDate) - new Date(TODAY)) / 86400000)
@@ -857,12 +883,13 @@ export default function MaterialProcurement() {
                     </tr>
                   );
                 })}
-                {receivingSchedule.length === 0 && (
+                {filteredSchedule.length === 0 && (
                   <tr><td colSpan={6} className="py-8 text-center text-slate-400">入庫予定なし</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+        </div>
         </div>
       )}
 
@@ -900,9 +927,9 @@ export default function MaterialProcurement() {
 
           {/* 価格改定テーブル */}
           <div className="card p-0 overflow-hidden">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto overflow-y-auto" style={{ maxHeight: '55vh' }}>
               <table className="w-full text-sm">
-                <thead className="bg-slate-50 border-b border-slate-200">
+                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                   <tr>
                     {['材料名', '適用開始日', '適用基準', '改定後単価', '備考', '操作'].map(h => (
                       <th key={h} className="text-left py-2 px-4 text-xs font-medium text-slate-500 whitespace-nowrap">{h}</th>

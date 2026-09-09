@@ -8,6 +8,7 @@ const STATUS_COLORS = {
   '完了':   'bg-green-100 text-green-700',
 };
 const CATEGORIES = ['設計書作成', '仕様確認', '試作・サンプル対応', '規格・認証調査', '客先図面対応', '設計変更', 'その他'];
+const CHANGE_TYPES = ['品番変更', '仕様変更', '図面修正', '材料変更', '工程変更', 'その他変更'];
 const TODAY = '2026-05-21';
 
 function isOverdue(req) {
@@ -22,9 +23,11 @@ function daysUntil(date) {
 function RequestModal({ initial, onClose, onSave }) {
   const { customers } = useApp();
   const blank = {
-    requester: '細野', category: '設計書作成', title: '', details: '',
-    desiredDate: '', customerCode: '', customerName: '', productName: '',
+    requester: '細野', category: '設計書作成', changeType: '', title: '', details: '',
+    desiredDate: '', customerCode: '', customerName: '',
+    productCode: '', productName: '', designNumber: '',
     specNumber: '', priority: '通常', assignee: '', status: '未着手', remarks: '',
+    attachments: [],
   };
   const [form, setForm] = useState(initial || blank);
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
@@ -53,10 +56,20 @@ function RequestModal({ initial, onClose, onSave }) {
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">分類</label>
-              <select className="select-field" value={form.category} onChange={e => set('category', e.target.value)}>
+              <select className="select-field" value={form.category}
+                onChange={e => { set('category', e.target.value); if (e.target.value !== '設計変更') set('changeType', ''); }}>
                 {CATEGORIES.map(c => <option key={c}>{c}</option>)}
               </select>
             </div>
+            {form.category === '設計変更' && (
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">変更種別</label>
+                <select className="select-field" value={form.changeType || ''} onChange={e => set('changeType', e.target.value)}>
+                  <option value="">— 選択 —</option>
+                  {CHANGE_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+            )}
             <div className="col-span-2">
               <label className="block text-xs font-medium text-slate-600 mb-1">依頼タイトル <span className="text-red-500">*</span></label>
               <input className="input-field" value={form.title} onChange={e => set('title', e.target.value)} placeholder="例：新規製品 CV-5.5-3C 設計書作成依頼" />
@@ -88,8 +101,16 @@ function RequestModal({ initial, onClose, onSave }) {
               <input className="input-field" value={form.customerName} onChange={e => set('customerName', e.target.value)} placeholder="コード入力で自動表示" />
             </div>
             <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">商品コード</label>
+              <input className="input-field" value={form.productCode || ''} onChange={e => set('productCode', e.target.value)} placeholder="例: CV-3.5-3C-BLK" />
+            </div>
+            <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">品名</label>
               <input className="input-field" value={form.productName} onChange={e => set('productName', e.target.value)} />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 mb-1">設計書番号</label>
+              <input className="input-field" value={form.designNumber || ''} onChange={e => set('designNumber', e.target.value)} placeholder="例: TF-2021-0342" />
             </div>
             <div>
               <label className="block text-xs font-medium text-slate-600 mb-1">客先仕様書番号</label>
@@ -104,6 +125,36 @@ function RequestModal({ initial, onClose, onSave }) {
               <select className="select-field" value={form.status} onChange={e => set('status', e.target.value)}>
                 {STATUSES.map(s => <option key={s}>{s}</option>)}
               </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-2">資料添付（最大3ファイル）</label>
+            <div className="space-y-2">
+              {(form.attachments || []).map((att, idx) => (
+                <div key={idx} className="flex items-center gap-2 bg-slate-50 rounded-lg px-3 py-2 text-sm">
+                  <span className="text-slate-500">📎</span>
+                  <span className="flex-1 text-slate-700 truncate">{att.name}</span>
+                  <span className="text-xs text-slate-400">{att.size}</span>
+                  <button type="button" onClick={() => set('attachments', form.attachments.filter((_, i) => i !== idx))}
+                    className="text-red-400 hover:text-red-600 text-xs ml-1">✕</button>
+                </div>
+              ))}
+              {(form.attachments || []).length < 3 && (
+                <label className="flex items-center gap-2 cursor-pointer text-sm text-blue-600 hover:text-blue-800">
+                  <input type="file" accept=".pdf,.xlsx,.xls,.docx,.png,.jpg,.jpeg" className="hidden"
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const kb = Math.round(file.size / 1024);
+                      set('attachments', [...(form.attachments || []), { name: file.name, size: kb > 1024 ? `${(kb/1024).toFixed(1)}MB` : `${kb}KB` }]);
+                      e.target.value = '';
+                    }} />
+                  <span className="border border-dashed border-blue-300 rounded-lg px-4 py-2 hover:bg-blue-50 transition-colors">
+                    ＋ ファイルを選択
+                  </span>
+                </label>
+              )}
             </div>
           </div>
 
@@ -140,7 +191,9 @@ export default function TechRequest() {
       const q = filterSearch.toLowerCase();
       if (!r.title.toLowerCase().includes(q) &&
           !r.customerName?.toLowerCase().includes(q) &&
-          !r.requester?.toLowerCase().includes(q)) return false;
+          !r.requester?.toLowerCase().includes(q) &&
+          !r.productCode?.toLowerCase().includes(q) &&
+          !r.designNumber?.toLowerCase().includes(q)) return false;
     }
     return true;
   });
@@ -179,7 +232,13 @@ export default function TechRequest() {
         <td className="py-2.5 px-3 font-mono text-xs text-slate-500">{r.id}</td>
         <td className="py-2.5 px-3">
           <div className="text-sm font-medium text-slate-800">{od && <span className="text-red-500 mr-1">⚠</span>}{r.title}</div>
-          <div className="text-xs text-slate-400 mt-0.5">{r.category}{r.customerName ? ` · ${r.customerName}` : ''}{r.productName ? ` · ${r.productName}` : ''}</div>
+          <div className="text-xs text-slate-400 mt-0.5">
+            {r.category}
+            {r.changeType && <span className="ml-1 px-1 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">{r.changeType}</span>}
+            {r.customerName ? ` · ${r.customerName}` : ''}
+            {r.productCode ? ` · ${r.productCode}` : r.productName ? ` · ${r.productName}` : ''}
+            {r.attachments?.length > 0 && <span className="ml-1 text-blue-500">📎×{r.attachments.length}</span>}
+          </div>
         </td>
         <td className="py-2.5 px-3 text-xs text-slate-600">{r.requester}</td>
         <td className="py-2.5 px-3 text-xs text-slate-600">{r.assignee || '—'}</td>

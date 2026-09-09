@@ -303,14 +303,19 @@ const docOptions = ['納品書（指定単票）', '試験成績表', 'サンプ
 function ProductModal({ product, onClose, onSave }) {
   const { customers } = useApp();
   const [form, setForm] = useState(product || {
-    productCode: '', designNumber: '', customerCode: '', customerName: '',
+    productCode: '', designNumber: '', specNumber: '', customerCode: '', customerName: '',
     sheathColor: '黒', conductorPitch: '', packaging: 'ドラム(D400)',
     requiredDocuments: [], sampleLength: 0, name: '',
+    weightPer1000m: '', paidSupplyFlag: '非対象',
     spec: { outerDiameter: { min: '', max: '' }, wallThickness: { min: '', max: '' } },
-    drawingUrl: '',
+    drawingUrls: ['', '', ''],
     drawingRevision: 'Rev.1',
     workConditions: { '絶縁': '', '対撚り': '', '集合': '', '編組': '', 'シース': '' },
-    labelSettings: { printer: '1号機', paperType: '標準', inspectionRequired: false },
+    labelSettings: [
+      { printer: '1号機', paperType: '標準', inspectionRequired: false },
+      { printer: '', paperType: '', inspectionRequired: false },
+      { printer: '', paperType: '', inspectionRequired: false },
+    ],
     autoReservation: false,
   });
 
@@ -351,14 +356,29 @@ function ProductModal({ product, onClose, onSave }) {
             <input className="input-field" value={form.designNumber} onChange={e => set('designNumber', e.target.value)} placeholder="例: TF-2021-0342" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-slate-600 mb-1">得意先</label>
+            <label className="block text-xs font-medium text-slate-600 mb-1">仕様書番号</label>
+            <input className="input-field" value={form.specNumber || ''} onChange={e => set('specNumber', e.target.value)} placeholder="例: SP-2021-0342" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">得意先コード / 名称</label>
             <select className="select-field" value={form.customerCode} onChange={e => {
               const c = customers.find(c => c.code === e.target.value);
               set('customerCode', e.target.value);
               if (c) set('customerName', c.name);
             }}>
               <option value="">選択してください</option>
-              {customers.map(c => <option key={c.id} value={c.code}>{c.name}</option>)}
+              {customers.map(c => <option key={c.id} value={c.code}>{c.code}　{c.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">1,000m あたり重量 (g)</label>
+            <input className="input-field" type="number" step="0.1" value={form.weightPer1000m || ''} onChange={e => set('weightPer1000m', e.target.value)} placeholder="例: 285.0" />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">有償支給の有無</label>
+            <select className="select-field" value={form.paidSupplyFlag || '非対象'} onChange={e => set('paidSupplyFlag', e.target.value)}>
+              <option value="非対象">非対象</option>
+              <option value="有償支給あり">有償支給あり</option>
             </select>
           </div>
           <div>
@@ -425,18 +445,24 @@ function ProductModal({ product, onClose, onSave }) {
         <div className="px-4 md:px-6 pb-2">
           <div className="border-t border-slate-100 pt-4">
             <div className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-3">📐 図面データ・作業条件</div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">図面URL（Google Drive / 社内サーバー等）</label>
-                <input
-                  className="input-field text-xs"
-                  value={form.drawingUrl || ''}
-                  onChange={e => set('drawingUrl', e.target.value)}
-                  placeholder="https://..."
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-1">図面リビジョン</label>
+            <div className="mb-4 space-y-2">
+              {[0, 1, 2].map(idx => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="text-xs text-slate-500 w-12 flex-shrink-0">図面{idx + 1}</span>
+                  <input
+                    className="input-field text-xs flex-1"
+                    value={(form.drawingUrls || ['','',''])[idx]}
+                    onChange={e => {
+                      const urls = [...(form.drawingUrls || ['','',''])];
+                      urls[idx] = e.target.value;
+                      set('drawingUrls', urls);
+                    }}
+                    placeholder="https://... (Google Drive / 社内サーバー)"
+                  />
+                </div>
+              ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-slate-500 w-12 flex-shrink-0">リビジョン</span>
                 <input
                   className="input-field"
                   value={form.drawingRevision || ''}
@@ -759,7 +785,7 @@ function PrototypeMasterTab() {
         outerDiameter: { min: parseFloat(newProtoForm.spec.outerDiameter.min)||0, max: parseFloat(newProtoForm.spec.outerDiameter.max)||0 },
         wallThickness: { min: parseFloat(newProtoForm.spec.wallThickness.min)||0, max: parseFloat(newProtoForm.spec.wallThickness.max)||0 },
       },
-      createdDate: '2026-08-20',
+      createdDate: new Date().toISOString().split('T')[0],
       status: '試作中',
       transferredProductId: null,
       transferredProductCode: null,

@@ -1,6 +1,10 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 
+// デプロイごとに更新するバージョン情報
+const APP_VERSION = 'v1.4';
+const DEPLOY_DATE = '2026-09-09';
+
 function FractionSettingsModal({ fractionRule, setFractionRule, onClose }) {
   const [rule, setRule] = useState(fractionRule.global || '四捨五入');
   const [decimals, setDecimals] = useState(fractionRule.decimals ?? 2);
@@ -91,6 +95,17 @@ export default function Layout({ children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFractionSettings, setShowFractionSettings] = useState(false);
 
+  // ダークモード
+  const [darkMode, setDarkMode] = useState(() => {
+    try { return localStorage.getItem('sd_dark_mode') === 'true'; }
+    catch { return false; }
+  });
+  const toggleDark = () => {
+    const next = !darkMode;
+    setDarkMode(next);
+    try { localStorage.setItem('sd_dark_mode', String(next)); } catch {}
+  };
+
   // PC用サイドバー折りたたみ（アイコンのみ）
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem('sd_sidebar_collapsed') === 'true'; }
@@ -116,7 +131,7 @@ export default function Layout({ children }) {
   };
 
   const inProgressMfg = mfgOrders.filter(m => m.status === '進行中').length;
-  const pendingOrders = orders.filter(o => o.status === '照会（仮押さえ）').length;
+  const pendingOrders = orders.filter(o => o.status === '未確定').length;
   const pendingReturns = (materialIssuances || []).filter(iss => iss.status === '払出済').length;
   const shortageCount = Object.entries(materialReorderConfig || {}).filter(
     ([matId, cfg]) => (currentStock?.[matId] || 0) <= (cfg.reorderPoint || 0)
@@ -216,7 +231,7 @@ export default function Layout({ children }) {
       </div>
       <div className="px-4 py-2">
         <div className="text-xs text-slate-400 bg-blue-50 rounded px-2 py-1 text-center font-medium text-blue-600">
-          ▶ デモ版 2026-05-21
+          ▶ デモ版 {APP_VERSION}　{DEPLOY_DATE}
         </div>
       </div>
       <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
@@ -271,7 +286,7 @@ export default function Layout({ children }) {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-slate-100">
+    <div className={`flex h-screen overflow-hidden bg-slate-100 ${darkMode ? 'dark-app' : ''}`}>
 
       {/* ── モバイル：オーバーレイ背景 ── */}
       {sidebarOpen && (
@@ -316,7 +331,7 @@ export default function Layout({ children }) {
         {!collapsed && (
           <div className="px-4 py-2">
             <div className="text-xs text-slate-400 bg-blue-50 rounded px-2 py-1 text-center font-medium text-blue-600">
-              ▶ デモ版 2026-05-21
+              ▶ デモ版 {APP_VERSION}　{DEPLOY_DATE}
             </div>
           </div>
         )}
@@ -404,6 +419,11 @@ export default function Layout({ children }) {
           </div>
 
           <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={toggleDark}
+              title={darkMode ? 'ライトモードに切替' : 'ダークモードに切替'}
+              className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 text-base leading-none transition-colors"
+            >{darkMode ? '☀️' : '🌙'}</button>
             <button
               onClick={() => setShowFractionSettings(true)}
               title={`端数処理: ${fractionRule?.global || '四捨五入'} ${fractionRule?.decimals ?? 2}桁`}

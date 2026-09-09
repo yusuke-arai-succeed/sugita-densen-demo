@@ -16,6 +16,31 @@ const COLORS = {
   '加工': { bg:'bg-emerald-500',light:'bg-emerald-50',text:'text-emerald-800',border:'border-emerald-400',header:'bg-emerald-100'},
 };
 
+// 受注ごとの色分けパレット（工程ではなく受注単位で一意の色を割り当て）
+const ORDER_COLORS_PALETTE = [
+  { light:'#eff6ff', border:'#93c5fd', text:'#1d4ed8', bg:'#3b82f6' },
+  { light:'#f0fdf4', border:'#86efac', text:'#15803d', bg:'#22c55e' },
+  { light:'#fdf4ff', border:'#d8b4fe', text:'#7e22ce', bg:'#a855f7' },
+  { light:'#fff7ed', border:'#fed7aa', text:'#9a3412', bg:'#f97316' },
+  { light:'#fef2f2', border:'#fca5a5', text:'#b91c1c', bg:'#ef4444' },
+  { light:'#f0fdfa', border:'#5eead4', text:'#0f766e', bg:'#14b8a6' },
+  { light:'#fff1f2', border:'#fda4af', text:'#be123c', bg:'#f43f5e' },
+  { light:'#fefce8', border:'#fde047', text:'#854d0e', bg:'#ca8a04' },
+  { light:'#f0f9ff', border:'#7dd3fc', text:'#075985', bg:'#0ea5e9' },
+  { light:'#fdf2f8', border:'#f0abfc', text:'#86198f', bg:'#d946ef' },
+  { light:'#ecfdf5', border:'#6ee7b7', text:'#065f46', bg:'#10b981' },
+  { light:'#fffbeb', border:'#fcd34d', text:'#92400e', bg:'#f59e0b' },
+  { light:'#f5f3ff', border:'#c4b5fd', text:'#5b21b6', bg:'#7c3aed' },
+  { light:'#fff7f5', border:'#fdba74', text:'#c2410c', bg:'#ea580c' },
+  { light:'#ecfeff', border:'#67e8f9', text:'#155e75', bg:'#06b6d4' },
+];
+
+function getOrderColor(orderId) {
+  let hash = 0;
+  for (let i = 0; i < orderId.length; i++) hash = (hash * 31 + orderId.charCodeAt(i)) >>> 0;
+  return ORDER_COLORS_PALETTE[hash % ORDER_COLORS_PALETTE.length];
+}
+
 function addDays(date, n) {
   const d = new Date(date); d.setDate(d.getDate() + n); return d;
 }
@@ -82,7 +107,7 @@ function deadlineColor(finalDeadline) {
 }
 
 const ORDER_STATUS_COLORS = {
-  '照会（仮押さえ）': 'bg-orange-100 text-orange-700',
+  '未確定': 'bg-orange-100 text-orange-700',
   '確定':             'bg-blue-100 text-blue-700',
   '分納中':           'bg-purple-100 text-purple-700',
   '完了':             'bg-green-100 text-green-700',
@@ -256,7 +281,7 @@ function OrderDetailModal({ order, onClose, onNavigate, products }) {
 function UnscheduledCard({ order, process, dragging, onDragStart, onDetail }) {
   const c = COLORS[process] || {};
   const dc = deadlineColor(order.finalDeadline);
-  const isTentative = order.status === '照会（仮押さえ）';
+  const isTentative = order.status === '未確定';
   return (
     <div
       draggable onDragStart={onDragStart}
@@ -291,24 +316,29 @@ function UnscheduledCard({ order, process, dragging, onDragStart, onDetail }) {
 }
 
 // ─── スケジュール済みカード ────────────────────────────────────
-function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, dragging, onDragStart, onRemove, onExtend, onShrink, onDetail, onMoveUp, onMoveDown, isHighlighted, commentCount }) {
+function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, dragging, onDragStart, onRemove, onExtend, onShrink, onDetail, onMoveUp, onMoveDown, isHighlighted, isSearchHit, commentCount }) {
   const [showMat, setShowMat] = useState(false);
   const c = COLORS[item.process] || {};
   if (!order) return null;
+  const oc = getOrderColor(order.id);
   const dc = deadlineColor(order.finalDeadline);
   const multi = slotTotal > 1;
   const continues = item.duration > 1;
-  const isTentative = order.status === '照会（仮押さえ）';
+  const isTentative = order.status === '未確定';
 
   return (
     <div
       data-item-id={item.id}
       draggable onDragStart={onDragStart}
       className={`relative group rounded-lg border-2 cursor-grab active:cursor-grabbing select-none
-        ${dragging ? 'opacity-30' : 'hover:shadow-md'} ${c.light}
-        ${isTentative ? 'border-amber-400 border-dashed' : c.border}
-        ${isHighlighted ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}
-      style={{ padding: '4px 6px', fontSize: '11px', lineHeight: '1.4' }}
+        ${dragging ? 'opacity-30' : 'hover:shadow-md'}
+        ${isSearchHit ? 'ring-2 ring-blue-500 ring-offset-2 shadow-lg shadow-blue-200' : isHighlighted ? 'ring-2 ring-yellow-400 ring-offset-1' : ''}`}
+      style={{
+        padding: '4px 6px', fontSize: '11px', lineHeight: '1.4',
+        backgroundColor: oc.light,
+        borderColor: isTentative ? '#fbbf24' : oc.border,
+        borderStyle: isTentative ? 'dashed' : 'solid',
+      }}
     >
       {/* × 削除 */}
       <button
@@ -321,7 +351,7 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
       {/* Row 1: スロット番号 + 仮バッジ + 受注番号 + 詳細 */}
       <div className="flex items-center gap-0.5">
         {multi && (
-          <span className={`px-1 rounded ${c.bg} text-white font-bold shrink-0`} style={{ fontSize: '9px' }}>
+          <span className="px-1 rounded text-white font-bold shrink-0" style={{ fontSize: '9px', backgroundColor: oc.bg }}>
             #{slotPos}
           </span>
         )}
@@ -331,7 +361,7 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
         {item.autoAssigned && (
           <span className="shrink-0" style={{ fontSize: '10px' }} title="自動配置">⚡</span>
         )}
-        <span className={`font-mono font-bold truncate ${c.text} flex-1`}>{order.orderNumber}</span>
+        <span className="font-mono font-bold truncate flex-1" style={{ color: oc.text }}>{order.orderNumber}</span>
         {commentCount > 0 && (
           <span className="shrink-0 flex items-center gap-0.5 px-1 py-0.5 rounded bg-amber-100 text-amber-700 font-bold" style={{ fontSize: '9px' }} title="現場コメントあり">
             💬{commentCount}
@@ -340,9 +370,8 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
         <button
           onMouseDown={e => e.stopPropagation()}
           onClick={e => { e.stopPropagation(); onDetail(); }}
-          className={`px-1 py-0.5 rounded hidden group-hover:inline-block z-20 font-medium shrink-0
-            ${c.text} bg-white/80 hover:bg-white border border-current`}
-          style={{ fontSize: '9px', borderOpacity: 0.3 }}
+          className="px-1 py-0.5 rounded hidden group-hover:inline-block z-20 font-medium shrink-0 bg-white/80 hover:bg-white border border-current"
+          style={{ fontSize: '9px', color: oc.text }}
         >詳細</button>
       </div>
 
@@ -363,25 +392,23 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
         <button
           onClick={e => { e.stopPropagation(); onShrink(); }}
           disabled={item.duration <= 1}
-          className={`w-5 h-4 rounded flex items-center justify-center font-bold transition-colors
-            ${item.duration <= 1 ? 'text-slate-300 cursor-not-allowed' : `${c.text} hover:${c.bg} hover:text-white`}`}
-          style={{ fontSize: '13px' }}
+          className="w-5 h-4 rounded flex items-center justify-center font-bold transition-colors text-slate-300 cursor-not-allowed"
+          style={{ fontSize: '13px', ...(item.duration > 1 ? { color: oc.text, cursor: 'pointer' } : {}) }}
         >−</button>
 
-        <span className={`px-1 rounded ${c.bg} text-white font-bold whitespace-nowrap`} style={{ fontSize: '10px' }}>
+        <span className="px-1 rounded text-white font-bold whitespace-nowrap" style={{ fontSize: '10px', backgroundColor: oc.bg }}>
           {item.duration}日
         </span>
 
         {/* ＋ ボタン */}
         <button
           onClick={e => { e.stopPropagation(); onExtend(); }}
-          className={`w-5 h-4 rounded flex items-center justify-center font-bold transition-colors
-            ${c.text} hover:${c.bg} hover:text-white`}
-          style={{ fontSize: '13px' }}
+          className="w-5 h-4 rounded flex items-center justify-center font-bold transition-colors"
+          style={{ fontSize: '13px', color: oc.text }}
         >＋</button>
 
         {continues && (
-          <span className={`${c.text} opacity-60 ml-0.5`} style={{ fontSize: '10px' }}>▶</span>
+          <span className="opacity-60 ml-0.5" style={{ fontSize: '10px', color: oc.text }}>▶</span>
         )}
 
         <div className="flex-1" />
@@ -394,8 +421,8 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
               onMouseEnter={() => setShowMat(true)}
               onMouseLeave={() => setShowMat(false)}
               onClick={e => e.stopPropagation()}
-              className={`px-1 py-0.5 rounded border ${c.border} ${c.text} bg-white/70 hover:bg-white transition-colors`}
-              style={{ fontSize: '9px' }}
+              className="px-1 py-0.5 rounded border bg-white/70 hover:bg-white transition-colors"
+              style={{ fontSize: '9px', borderColor: oc.border, color: oc.text }}
             >使用材料</button>
             {showMat && (
               <div
@@ -429,17 +456,15 @@ function ScheduledCard({ item, order, bom, lossRate, slotPos, slotTotal, draggin
               onMouseDown={e => e.stopPropagation()}
               onClick={e => { e.stopPropagation(); onMoveUp?.(); }}
               disabled={!onMoveUp}
-              className={`w-4 h-3 flex items-center justify-center rounded leading-none
-                ${onMoveUp ? `${c.text} hover:${c.bg} hover:text-white` : 'text-slate-200 cursor-not-allowed'}`}
-              style={{ fontSize: '9px' }}
+              className="w-4 h-3 flex items-center justify-center rounded leading-none"
+              style={{ fontSize: '9px', color: onMoveUp ? oc.text : '#e2e8f0', cursor: onMoveUp ? 'pointer' : 'not-allowed' }}
             >▲</button>
             <button
               onMouseDown={e => e.stopPropagation()}
               onClick={e => { e.stopPropagation(); onMoveDown?.(); }}
               disabled={!onMoveDown}
-              className={`w-4 h-3 flex items-center justify-center rounded leading-none
-                ${onMoveDown ? `${c.text} hover:${c.bg} hover:text-white` : 'text-slate-200 cursor-not-allowed'}`}
-              style={{ fontSize: '9px' }}
+              className="w-4 h-3 flex items-center justify-center rounded leading-none"
+              style={{ fontSize: '9px', color: onMoveDown ? oc.text : '#e2e8f0', cursor: onMoveDown ? 'pointer' : 'not-allowed' }}
             >▼</button>
           </div>
         )}
@@ -587,6 +612,10 @@ export default function ProductionSchedule() {
   const idCounter = useRef(200);
   const [unschFilterSearch, setUnschFilterSearch] = useState('');  // No.14
   const [viewMode, setViewMode] = useState('gantt');               // No.6: 'gantt'|'timeline'
+  const [ganttSearch, setGanttSearch] = useState('');
+  const [ganttHitIds, setGanttHitIds] = useState(new Set());
+  const [ganttHitOrderIds, setGanttHitOrderIds] = useState([]); // 案件単位ナビ用
+  const [ganttHitIdx, setGanttHitIdx] = useState(0);
 
   const [showLines, setShowLines] = useState(false);
   const [svgLines, setSvgLines] = useState([]);
@@ -651,7 +680,7 @@ export default function ProductionSchedule() {
     Object.values(schedule).flat().map(s => `${s.orderId}_${s.process}`)
   );
   const unscheduledItems = orders
-    .filter(o => ['確定', '照会（仮押さえ）', '分納中'].includes(o.status))
+    .filter(o => ['確定', '未確定', '分納中'].includes(o.status))
     .flatMap(order => PROCESS_ORDER
       .filter(proc => !scheduledSet.has(`${order.id}_${proc}`))
       .map(proc => ({ orderId: order.id, process: proc }))
@@ -741,6 +770,48 @@ export default function ProductionSchedule() {
         slotOrder: existingOnDay.length,
       };
       scheduleNewItem(machineId, newItem);
+
+      // 同じ受注の残り工程をリードタイム付きで自動配置
+      const orderId = dragItem.orderId;
+      const droppedProcess = dragItem.process;
+      const droppedIdx = PROCESS_ORDER.indexOf(droppedProcess);
+      const scheduledFlat = Object.values(schedule).flat();
+      const PROC_BUF = 2; // 工程間リードタイム（営業日）
+      const ganttStartDate = fmt(weekDays[0]); // ガント表示範囲の開始日
+      const autoAssignments = PROCESS_ORDER
+        .map((proc, procIdx) => {
+          if (proc === droppedProcess) return null;
+          if (scheduledFlat.some(it => it.orderId === orderId && it.process === proc)) return null;
+          const machinesForProc = PROCESS_MACHINE_MAP[proc] || [];
+          if (!machinesForProc.length) return null;
+          const diff = procIdx - droppedIdx;
+          let targetDate = startDate;
+          if (diff > 0) {
+            for (let k = 0; k < diff; k++) targetDate = nextNBizDays(targetDate, PROC_BUF + 1);
+          } else {
+            for (let k = 0; k < -diff; k++) targetDate = prevNBizDays(targetDate, PROC_BUF + 1);
+          }
+          // ガント表示範囲外（過去）になる場合はガント開始日に収める
+          if (targetDate < ganttStartDate) targetDate = ganttStartDate;
+          const freeMachine = machinesForProc.find(m =>
+            !(schedule[m] || []).some(it => it.startDate === targetDate)
+          ) || machinesForProc[0];
+          if (!freeMachine) return null;
+          const existingOnTarget = (schedule[freeMachine] || []).filter(it => it.startDate === targetDate);
+          return {
+            machineId: freeMachine,
+            item: {
+              id: `si${idCounter.current++}`,
+              orderId,
+              process: proc,
+              startDate: targetDate,
+              duration: 1,
+              slotOrder: existingOnTarget.length,
+            },
+          };
+        })
+        .filter(Boolean);
+      if (autoAssignments.length > 0) scheduleAutoAssignBatch(autoAssignments);
     }
     setDragItem(null);
     setDragOverCell(null);
@@ -1138,6 +1209,69 @@ export default function ProductionSchedule() {
   const nextWeek = () => { const d = new Date(weekStart); d.setDate(d.getDate() + 7 * viewWeeks); setWeekStart(d); };
   const goToday  = () => setWeekStart(getMonday(new Date(todayStr)));
 
+  // 配置済みアイテムのインクリメンタルサーチ（案件単位）
+  const allScheduledFlat = Object.entries(schedule).flatMap(([machineId, items]) =>
+    items.map(item => ({ ...item, machineId }))
+  );
+
+  const doGanttSearch = (query) => {
+    const q = query.trim().toLowerCase();
+    if (!q) { setGanttHitIds(new Set()); setGanttHitOrderIds([]); setGanttHitIdx(0); return; }
+
+    // 案件単位でマッチ: いずれかの工程カードがクエリに合えばその案件全体をヒット
+    const matchedOrderIds = new Set(
+      allScheduledFlat
+        .filter(item => {
+          const order = orders.find(o => o.id === item.orderId);
+          if (!order) return false;
+          return (
+            order.orderNumber.toLowerCase().includes(q) ||
+            order.productName.toLowerCase().includes(q) ||
+            (order.customerName || '').toLowerCase().includes(q) ||
+            item.process.toLowerCase().includes(q) ||
+            item.machineId.toLowerCase().includes(q)
+          );
+        })
+        .map(item => item.orderId)
+    );
+
+    // マッチした案件に属する全カードをハイライト対象に
+    const hitIds = new Set(
+      allScheduledFlat.filter(item => matchedOrderIds.has(item.orderId)).map(item => item.id)
+    );
+
+    // 案件ごとの最早配置日でソートして、ナビゲーション順を決める
+    const orderEarliest = {};
+    allScheduledFlat.forEach(item => {
+      if (!matchedOrderIds.has(item.orderId)) return;
+      if (!orderEarliest[item.orderId] || item.startDate < orderEarliest[item.orderId]) {
+        orderEarliest[item.orderId] = item.startDate;
+      }
+    });
+    const sortedOrderIds = [...matchedOrderIds].sort(
+      (a, b) => orderEarliest[a].localeCompare(orderEarliest[b])
+    );
+
+    setGanttHitIds(hitIds);
+    setGanttHitOrderIds(sortedOrderIds);
+    setGanttHitIdx(0);
+    if (sortedOrderIds.length > 0) {
+      setWeekStart(getMonday(new Date(orderEarliest[sortedOrderIds[0]])));
+    }
+  };
+
+  const goToGanttHit = (idx) => {
+    const orderId = ganttHitOrderIds[idx];
+    if (!orderId) return;
+    setGanttHitIdx(idx);
+    // その案件の最早カードの週へジャンプ
+    const earliest = allScheduledFlat
+      .filter(it => it.orderId === orderId)
+      .map(it => it.startDate)
+      .sort()[0];
+    if (earliest) setWeekStart(getMonday(new Date(earliest)));
+  };
+
   // 工程順序違反チェック
   const orderViolations = (() => {
     const byOrder = {};
@@ -1203,16 +1337,16 @@ export default function ProductionSchedule() {
           {coveredItems.length > 0 && (
             <div className="mb-0.5 space-y-0.5">
               {coveredItems.map(item => {
-                const cc  = COLORS[item.process] || {};
                 const ord = orders.find(o => o.id === item.orderId);
+                const oc2 = ord ? getOrderColor(ord.id) : ORDER_COLORS_PALETTE[0];
                 return (
                   <div
                     key={item.id}
-                    className={`flex items-center gap-1 px-1 rounded border ${cc.border} ${cc.light} opacity-50`}
-                    style={{ fontSize: '9px' }}
+                    className="flex items-center gap-1 px-1 rounded border opacity-50"
+                    style={{ fontSize: '9px', borderColor: oc2.border, backgroundColor: oc2.light }}
                   >
-                    <span className={cc.text}>◀</span>
-                    <span className={`font-mono ${cc.text} truncate`}>{ord?.orderNumber}</span>
+                    <span style={{ color: oc2.text }}>◀</span>
+                    <span className="font-mono truncate" style={{ color: oc2.text }}>{ord?.orderNumber}</span>
                   </div>
                 );
               })}
@@ -1227,14 +1361,15 @@ export default function ProductionSchedule() {
           )}
 
           {/* ドロップ先ガイド（空セルのみ） */}
-          {!isHoliday && isOver && dragItem && startItems.length === 0 && coveredItems.length === 0 && (
-            <div className={`p-1 rounded border-2 border-dashed text-center opacity-70
-              ${COLORS[dragItem.process]?.border ?? 'border-blue-400'}
-              ${COLORS[dragItem.process]?.light ?? 'bg-blue-50'}
-              ${COLORS[dragItem.process]?.text ?? 'text-blue-600'}`}
-              style={{ fontSize: '10px' }}
-            >配置</div>
-          )}
+          {!isHoliday && isOver && dragItem && startItems.length === 0 && coveredItems.length === 0 && (() => {
+            const dragOrder = orders.find(o => o.id === dragItem.orderId);
+            const oc3 = dragOrder ? getOrderColor(dragOrder.id) : ORDER_COLORS_PALETTE[0];
+            return (
+              <div className="p-1 rounded border-2 border-dashed text-center opacity-70"
+                style={{ fontSize: '10px', borderColor: oc3.border, backgroundColor: oc3.light, color: oc3.text }}
+              >配置</div>
+            );
+          })()}
 
           {/* 積み重ねカード */}
           <div className="space-y-0.5">
@@ -1266,6 +1401,7 @@ export default function ProductionSchedule() {
                   slotTotal={startItems.length}
                   dragging={isDragging}
                   isHighlighted={detailOrder?.id === order.id}
+                  isSearchHit={ganttHitIds.size > 0 && ganttHitIds.has(item.id)}
                   commentCount={mfgOrders?.find(m => m.orderId === order.id)?.comments?.length || 0}
                   onDragStart={e => handleDragStart(e, { ...item, fromMachineId: machine.id })}
                   onRemove={() => handleRemove(machine.id, item)}
@@ -1376,11 +1512,56 @@ export default function ProductionSchedule() {
               <span className="text-xs text-slate-400 ml-auto">{(PROCESS_MACHINE_MAP[p]||[]).length}台</span>
             </div>
           ))}
+          <div className="pt-1 border-t border-slate-100 flex items-center gap-1.5">
+            {ORDER_COLORS_PALETTE.slice(0,6).map((oc,i) => (
+              <div key={i} className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: oc.bg }} />
+            ))}
+            <span className="text-xs text-slate-400 ml-1">カード色＝受注</span>
+          </div>
         </div>
       </div>
 
       {/* 右: グリッドエリア */}
       <div className="flex-1 flex flex-col min-w-0">
+
+        {/* 配置済み案件検索バー */}
+        <div className="flex items-center gap-2 mb-2 flex-shrink-0 flex-wrap">
+          <div className="relative">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none">🔍</span>
+            <input
+              type="text"
+              className="pl-7 pr-3 py-1.5 text-xs border border-slate-200 rounded-lg w-64 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+              placeholder="配置済み案件を検索（受注番号・品名・得意先…）"
+              value={ganttSearch}
+              onChange={e => {
+                setGanttSearch(e.target.value);
+                doGanttSearch(e.target.value);
+              }}
+            />
+          </div>
+          {ganttHitOrderIds.length > 0 && (
+            <>
+              <span className="text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded px-2 py-1">
+                {ganttHitIdx + 1} / {ganttHitOrderIds.length} 案件
+              </span>
+              <button
+                onClick={() => goToGanttHit((ganttHitIdx - 1 + ganttHitOrderIds.length) % ganttHitOrderIds.length)}
+                className="btn-secondary px-2 py-1 text-xs">◀ 前
+              </button>
+              <button
+                onClick={() => goToGanttHit((ganttHitIdx + 1) % ganttHitOrderIds.length)}
+                className="btn-secondary px-2 py-1 text-xs">次 ▶
+              </button>
+              <button
+                onClick={() => { setGanttSearch(''); setGanttHitIds(new Set()); setGanttHitOrderIds([]); setGanttHitIdx(0); }}
+                className="text-xs text-slate-400 hover:text-red-500 transition-colors">✕ クリア
+              </button>
+            </>
+          )}
+          {ganttSearch.trim() && ganttHitIds.size === 0 && (
+            <span className="text-xs text-slate-400">一致する案件なし</span>
+          )}
+        </div>
 
         {/* コントロールバー */}
         <div className="flex items-center justify-between mb-3 flex-shrink-0 flex-wrap gap-2">

@@ -15,6 +15,9 @@ const LABEL_STATUS_COLORS = {
 function LabelPreview({ order, product, customer, paperType }) {
   const ls = product?.labelSettings || {};
   const effectivePaper = paperType || ls.paperType || '標準';
+  const autoWeight = product?.weightPer1000m && order.totalQuantity
+    ? Math.round(product.weightPer1000m * order.totalQuantity / 1000 * 10) / 10
+    : null;
   return (
     <div style={{ width: 300, fontFamily: 'monospace', fontSize: 11 }}
       className="border-2 border-slate-700 rounded p-3 bg-white shadow-inner select-none">
@@ -30,7 +33,7 @@ function LabelPreview({ order, product, customer, paperType }) {
           <div><span className="text-slate-400">色:</span> {product?.sheathColor || '-'}</div>
           <div><span className="text-slate-400">荷姿:</span> {order.packaging || '-'}</div>
           <div><span className="text-slate-400">条長:</span> {order.totalQuantity?.toLocaleString()}{order.unit}</div>
-          <div><span className="text-slate-400">梱包:</span> {order.packaging?.replace(/\(.*\)/, '') || '-'}</div>
+          <div><span className="text-slate-400">重量:</span> {autoWeight != null ? `${autoWeight}kg` : '-'}</div>
         </div>
         <div className="border-t border-dashed border-slate-300 pt-1 mt-1 space-y-0.5 text-xs">
           <div><span className="text-slate-400">得意先:</span> {order.customerName}</div>
@@ -113,6 +116,12 @@ function LabelIssueModal({ order, product, customer, onClose, onIssue }) {
                 <div className="text-slate-500">・ 受注番号をキーに色・条長・客先製番を引用</div>
                 <div className="text-slate-500">・ 製品マスターのラベル設定を適用</div>
                 <div className="text-slate-500">・ 得意先フォーマット: {customer?.labelFormat || '標準'}</div>
+                {product?.weightPer1000m && order.totalQuantity && (
+                  <div className="text-blue-700 font-medium mt-1">
+                    ⚖️ 自動計算重量: {Math.round(product.weightPer1000m * order.totalQuantity / 1000 * 10) / 10} kg
+                    <span className="text-slate-400 font-normal ml-1">（{product.weightPer1000m}kg/km × {order.totalQuantity}m）</span>
+                  </div>
+                )}
                 {ls.inspectionRequired && (
                   <div className="text-green-700 font-medium mt-1">✓ 検査合格確認済 → 出力許可</div>
                 )}
@@ -141,7 +150,7 @@ export default function LabelOutput() {
   const [issueTarget, setIssueTarget] = useState(null);
 
   // 照会・完了以外の仕掛中受注を対象にする
-  const activeOrders = orders.filter(o => o.status !== '照会（仮押さえ）' && o.status !== '完了');
+  const activeOrders = orders.filter(o => o.status !== '未確定' && o.status !== '完了');
 
   const filteredOrders = activeOrders.filter(o => {
     if (filterSearch) {
@@ -198,7 +207,7 @@ export default function LabelOutput() {
             <th className={thClass}>製品名</th>
             <th className={`${thClass} text-right`}>数量</th>
             <th className={thClass}>プリンタ</th>
-            <th className={thClass}>台紙</th>
+            <th className={thClass}>発行済ラベル</th>
             <th className={thClass}>検査</th>
             <th className={thClass}>ステータス</th>
             {showIssueBtn && <th className={thClass}>操作</th>}
@@ -212,6 +221,10 @@ export default function LabelOutput() {
             const product = products.find(p => p.id === order.productId);
             const customer = customers.find(c => c.code === order.customerCode);
             const ls = product?.labelSettings || {};
+            const orderIssuances = labelIssuances.filter(l => l.orderId === order.id);
+            const issuedTypes = [...new Set(orderIssuances.map(l => l.paperType))];
+            const neededType = ls.paperType || '標準';
+            const hasStandard = order.labelStatus === '出力済' || issuedTypes.includes('標準') || issuedTypes.includes(neededType);
             return (
               <tr key={order.id} className="hover:bg-slate-50 transition-colors">
                 <td className={tdClass}><span className="font-mono text-xs">{order.orderNumber}</span></td>
@@ -222,7 +235,16 @@ export default function LabelOutput() {
                   <span className="text-xs bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded font-medium">{ls.printer || '-'}</span>
                 </td>
                 <td className={tdClass}>
-                  <span className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{ls.paperType || '標準'}</span>
+                  <div className="flex flex-wrap gap-1">
+                    <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${hasStandard ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                      {neededType !== '標準' ? neededType : '標準'} {hasStandard ? '✓' : '—'}
+                    </span>
+                    {neededType !== '標準' && (
+                      <span className={`text-xs px-1.5 py-0.5 rounded border font-medium ${issuedTypes.includes('標準') ? 'bg-green-50 text-green-700 border-green-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>
+                        標準 {issuedTypes.includes('標準') ? '✓' : '—'}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className={tdClass}>
                   <span className={`text-xs font-medium ${ls.inspectionRequired ? 'text-yellow-700' : 'text-slate-400'}`}>

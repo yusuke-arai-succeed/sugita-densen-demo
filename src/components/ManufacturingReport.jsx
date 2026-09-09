@@ -481,12 +481,12 @@ export default function ManufacturingReport() {
   const [pendingStepIndex, setPendingStepIndex] = useState(null);
   const [showTroubleModal, setShowTroubleModal] = useState(false);   // No.11
   const [todayOutput, setTodayOutput] = useState('');               // No.10
-  // No.9 作業開始チェックシート
-  const [startCheckValues, setStartCheckValues] = useState({});     // { [mfgOrderId]: { [item]: value } }
+  // 作業開始チェックシート（工程ごと）
+  const [startCheckValues, setStartCheckValues] = useState({});     // { [ordId::stepName]: { [item]: value } }
+  const [startCheckConfirmed, setStartCheckConfirmed] = useState({}); // { [ordId::stepName]: boolean }
   const [startCheckAlert, setStartCheckAlert] = useState(null);     // { item, actual, specMin, specMax }
-  // 作業終了チェックシート
-  const [endCheckValues, setEndCheckValues] = useState({});         // { [mfgOrderId]: { [item]: value } }
-  const [endCheckSubmitted, setEndCheckSubmitted] = useState({});   // { [mfgOrderId]: boolean }
+  // 完了チェックシート（工程ごと）
+  const [endCheckValues, setEndCheckValues] = useState({});         // { [ordId::stepName]: { [item]: value } }
   const [commentText, setCommentText] = useState('');               // No.4
   const [commentAuthor, setCommentAuthor] = useState('');           // No.4
   // 残材入庫（No.12）
@@ -598,9 +598,8 @@ export default function ManufacturingReport() {
     setAlertBy(prev => ({ ...prev, [stepIndex]: '' }));
   };
 
-  // 完了ボタンの制御：測定値は工程ごとに検証済みなので全工程完了のみ確認
   const allStepsComplete = selected?.processSteps.every(s => s.completed);
-  const canComplete = allStepsComplete && (endCheckSubmitted[selected?.id] || false);
+  const canComplete = allStepsComplete;
 
   const handleComplete = () => {
     if (!canComplete) return;
@@ -791,106 +790,6 @@ export default function ManufacturingReport() {
             )}
           </div>
 
-          {/* No.9 作業開始チェックシート */}
-          {selected.status !== '完了' && selectedProduct?.spec && (() => {
-            const ordId = selected.id;
-            const vals = startCheckValues[ordId] || {};
-            const checkItems = [
-              { item: '外径',   specMin: selectedProduct.spec.outerDiameter?.min,  specMax: selectedProduct.spec.outerDiameter?.max,  unit: 'mm' },
-              { item: '肉厚',   specMin: selectedProduct.spec.wallThickness?.min,   specMax: selectedProduct.spec.wallThickness?.max,   unit: 'mm' },
-              { item: '偏肉',   specMin: 0,    specMax: 0.2,    unit: 'mm' },
-              { item: 'ピッチ', specMin: Math.max(1, (parseFloat(selectedProduct.conductorPitch) || 15) - 2), specMax: (parseFloat(selectedProduct.conductorPitch) || 15) + 2, unit: 'mm' },
-            ].filter(c => c.specMin != null && c.specMax != null);
-            if (checkItems.length === 0) return null;
-
-            const outOfSpecItems = checkItems.filter(c => {
-              const v = vals[c.item];
-              if (v === '' || v === undefined) return false;
-              const n = Number(v);
-              return n < c.specMin || n > c.specMax;
-            });
-            const filledCount = checkItems.filter(c => vals[c.item] !== undefined && vals[c.item] !== '').length;
-            const allOk = filledCount === checkItems.length && outOfSpecItems.length === 0;
-
-            return (
-              <div className={`card border-2 transition-all ${outOfSpecItems.length > 0 ? 'border-red-400 bg-red-50 animate-[pulse_0.5s_ease-in-out_3]' : allOk ? 'border-green-400' : 'border-blue-200'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                    📋 作業開始チェックシート
-                    {allOk && <span className="text-xs text-green-600 font-normal">✅ すべて規格内</span>}
-                    {outOfSpecItems.length > 0 && <span className="text-xs text-red-700 font-bold animate-pulse">❌ 規格外あり！</span>}
-                  </h3>
-                  <span className="text-xs text-slate-400">{filledCount}/{checkItems.length} 入力済</span>
-                </div>
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      {['測定項目', '規格値（Min〜Max）', '実測値', '判定'].map(h => (
-                        <th key={h} className="text-left py-1.5 px-2 text-xs font-medium text-slate-500">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {checkItems.map(c => {
-                      const v = vals[c.item];
-                      const isEmpty = v === undefined || v === '';
-                      const n = isEmpty ? null : Number(v);
-                      const isOk = n !== null && n >= c.specMin && n <= c.specMax;
-                      const isOut = n !== null && !isOk;
-                      return (
-                        <tr key={c.item} className={`border-b border-slate-100 transition-colors ${isOut ? 'bg-red-50' : ''}`}>
-                          <td className="py-2 px-2 text-xs font-medium text-slate-700">{c.item}</td>
-                          <td className="py-2 px-2 text-xs font-mono text-slate-500">{c.specMin} 〜 {c.specMax} {c.unit}</td>
-                          <td className="py-2 px-2">
-                            <div className="flex items-center gap-1">
-                              <input
-                                type="number" step="0.01"
-                                className={`input-field text-xs w-24 text-right font-mono ${isOut ? 'border-red-400 bg-red-100 text-red-700 font-bold ring-1 ring-red-400' : ''}`}
-                                value={v ?? ''}
-                                onChange={e => {
-                                  const newV = e.target.value;
-                                  setStartCheckValues(prev => ({
-                                    ...prev,
-                                    [ordId]: { ...(prev[ordId] || {}), [c.item]: newV },
-                                  }));
-                                  if (newV !== '') {
-                                    const num = Number(newV);
-                                    if (num < c.specMin || num > c.specMax) {
-                                      setStartCheckAlert({ item: c.item, actual: num, specMin: c.specMin, specMax: c.specMax, unit: c.unit });
-                                    } else {
-                                      setStartCheckAlert(null);
-                                    }
-                                  }
-                                }}
-                                placeholder="実測値"
-                              />
-                              <span className="text-xs text-slate-400">{c.unit}</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2 text-xs text-center">
-                            {isEmpty ? <span className="text-slate-300">—</span>
-                              : isOk  ? <span className="text-green-600 font-bold">✅ OK</span>
-                              : <span className="text-red-600 font-bold">❌ NG</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {outOfSpecItems.length > 0 && (
-                  <div className="mt-3 p-3 bg-red-100 border border-red-300 rounded-xl">
-                    <div className="text-sm font-bold text-red-700 mb-1">⚠️ 規格外の測定値があります！</div>
-                    {outOfSpecItems.map(c => (
-                      <div key={c.item} className="text-xs text-red-700">
-                        【{c.item}】実測: {vals[c.item]} {c.unit} → 規格: {c.specMin}〜{c.specMax} {c.unit}
-                      </div>
-                    ))}
-                    <div className="text-xs text-red-500 mt-1.5 font-medium">作業を一時停止し、設備の調整を行ってください。</div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
           {/* ① 工程フロー */}
           <div className="card">
@@ -950,150 +849,324 @@ export default function ManufacturingReport() {
               );
             })()}
 
-            {/* ── 現在工程のインライン測定値入力 ── */}
+            {/* ── 工程ごとの開始チェック → 完了チェックシート ── */}
             {selected.status !== '完了' && (() => {
               const activeStep = selected.processSteps[completedSteps];
               if (!activeStep) return null;
-              const stepMeas = selected.measurements?.[activeStep.step] || [];
-              if (stepMeas.length === 0) return null;
-              const allFilled = stepMeas.every(m => m.actual !== '' && m.actual !== null && m.actual !== undefined);
-              const outOfSpec = stepMeas.filter(m => {
+              const stepName = activeStep.step;
+              const stepKey = `${selected.id}::${stepName}`;
+
+              // 作業開始チェック
+              const startVals = startCheckValues[stepKey] || {};
+              const isStarted = startCheckConfirmed[stepKey] || false;
+              const startItems = selectedProduct?.spec ? [
+                { item: '外径',   specMin: selectedProduct.spec.outerDiameter?.min,  specMax: selectedProduct.spec.outerDiameter?.max,  unit: 'mm' },
+                { item: '肉厚',   specMin: selectedProduct.spec.wallThickness?.min,   specMax: selectedProduct.spec.wallThickness?.max,   unit: 'mm' },
+                { item: '偏肉',   specMin: 0, specMax: 0.2, unit: 'mm' },
+                { item: 'ピッチ', specMin: Math.max(1, (parseFloat(selectedProduct?.conductorPitch) || 15) - 2), specMax: (parseFloat(selectedProduct?.conductorPitch) || 15) + 2, unit: 'mm' },
+              ].filter(c => c.specMin != null && c.specMax != null) : [];
+              const startFilled = startItems.every(c => startVals[c.item] !== undefined && startVals[c.item] !== '');
+              const startOutOfSpec = startItems.filter(c => {
+                const v = startVals[c.item];
+                if (v === '' || v === undefined) return false;
+                const n = Number(v);
+                return n < c.specMin || n > c.specMax;
+              });
+              const startAllOk = startFilled && startOutOfSpec.length === 0;
+
+              // 完了チェックシート
+              const stepMeas = selected.measurements?.[stepName] || [];
+              const endVals = endCheckValues[stepKey] || {};
+              const isLastStep = completedSteps === selected.processSteps.length - 1;
+              const endBoolItems = isLastStep
+                ? ['外観・傷確認', '刻印・マーキング確認', '清掃完了']
+                : ['外観・傷確認', '刻印・マーキング確認'];
+              const measAllFilled = stepMeas.every(m => m.actual !== '' && m.actual !== null && m.actual !== undefined);
+              const measOutOfSpec = stepMeas.filter(m => {
                 if (m.actual === '' || m.actual === null || m.actual === undefined) return false;
                 const v = Number(m.actual);
                 return (m.specMin !== null && v < m.specMin) || (m.specMax !== null && v > m.specMax);
               });
-              return (
-                <div className="mt-4 border-t border-slate-200 pt-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-xs font-bold text-slate-700">📏 【{activeStep.step}】測定値入力</span>
-                    {allFilled && outOfSpec.length === 0 && <span className="text-green-600 text-xs font-medium">✅ すべて規格内</span>}
-                    {allFilled && outOfSpec.length > 0 && <span className="text-red-600 text-xs font-bold">❌ 規格外あり</span>}
-                    {!allFilled && <span className="text-orange-500 text-xs">⚠ 未入力あり</span>}
-                  </div>
-                  <table className="w-full text-sm">
-                    <thead className="bg-slate-50">
-                      <tr>
-                        {['測定項目', '規格値（公差）', '実測値', '判定'].map(h => (
-                          <th key={h} className="text-left py-1.5 px-2 text-xs font-medium text-slate-500">{h}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {stepMeas.map((m, i) => {
-                        const isEmpty = m.actual === '' || m.actual === null || m.actual === undefined;
-                        const val = isEmpty ? null : Number(m.actual);
-                        const isOk = val !== null &&
-                          (m.specMin === null || val >= m.specMin) &&
-                          (m.specMax === null || val <= m.specMax);
-                        const isOut = val !== null && !isOk;
-                        return (
-                          <tr key={m.item} className={`border-b border-slate-100 ${isOut ? 'bg-red-50' : ''}`}>
-                            <td className="py-1.5 px-2 text-xs font-medium text-slate-700">{m.item}</td>
-                            <td className="py-1.5 px-2 text-xs text-slate-500 font-mono">
-                              {m.specMin} 〜 {m.specMax} {m.unit}
-                            </td>
-                            <td className="py-1.5 px-2">
-                              <div className="flex items-center gap-1">
-                                <input
-                                  type="number" step="0.01"
-                                  className={`input-field text-xs w-24 text-right font-mono ${isOut ? 'border-red-400 bg-red-50 text-red-700 font-bold' : ''}`}
-                                  value={m.actual ?? ''}
-                                  onChange={e => handleMeasurementChange(activeStep.step, i, e.target.value)}
-                                  placeholder="実測値"
-                                />
-                                <span className="text-xs text-slate-400">{m.unit}</span>
-                              </div>
-                            </td>
-                            <td className="py-1.5 px-2 text-xs text-center">
-                              {isEmpty ? <span className="text-slate-300">—</span>
-                                : isOk ? <span className="text-green-600">✅</span>
-                                : <span className="text-red-600 font-bold">❌ 規格外</span>}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                  <div className="mt-3 flex items-center justify-between">
-                    <div className="text-xs text-slate-500">
-                      {!allFilled && <span className="text-orange-600">⚠️ 未入力の測定値があります</span>}
-                      {allFilled && outOfSpec.length > 0 && (
-                        <span className="text-red-600">❌ 規格外の値があります。責任者承認で強制完了できます</span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap">
-                      {/* 遅延アラート発出ボタン */}
-                      {(() => {
-                        const stepIdx = completedSteps;
-                        const stepName = activeStep?.step;
-                        const alreadyFiled = delayAlerts?.some(
-                          a => a.orderId === selected.orderId && a.processName === stepName && a.status === 'active'
-                        );
-                        return alreadyFiled ? (
-                          <span className="text-xs text-orange-600 font-medium px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg">
-                            🔔 遅延アラート発出済み
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => setAlertFormOpen(prev => ({ ...prev, [stepIdx]: !prev[stepIdx] }))}
-                            className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200 transition-colors">
-                            🔔 遅延アラート発出
-                          </button>
-                        );
-                      })()}
-                      {allFilled && outOfSpec.length > 0 && (
-                        <button
-                          onClick={() => { setPendingStepIndex(completedSteps); setShowForceComplete(true); }}
-                          className="bg-red-100 text-red-700 border border-red-300 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-200">
-                          ⚠️ 強制完了（責任者）
-                        </button>
-                      )}
-                      <button
-                        onClick={() => handleStepToggle(completedSteps)}
-                        disabled={!allFilled || outOfSpec.length > 0}
-                        className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          allFilled && outOfSpec.length === 0
-                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                            : 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        }`}>
-                        この工程を完了 ✓
-                      </button>
-                    </div>
+              const endBoolAllOk = endBoolItems.every(b => endVals[b] === 'OK');
+              const canCompleteStep = measAllFilled && measOutOfSpec.length === 0 && endBoolAllOk;
 
-                    {/* 遅延アラート入力フォーム */}
-                    {alertFormOpen[completedSteps] && (
-                      <div className="mt-3 p-3 rounded-lg bg-orange-50 border border-orange-200 space-y-2">
-                        <div className="text-xs font-bold text-orange-700">🔔 遅延アラート発出</div>
-                        <input
-                          type="text"
-                          placeholder="担当者名"
-                          value={alertBy[completedSteps] || ''}
-                          onChange={e => setAlertBy(prev => ({ ...prev, [completedSteps]: e.target.value }))}
-                          className="w-full text-xs border border-orange-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400"
-                        />
-                        <textarea
-                          rows={2}
-                          placeholder="遅延理由・見込み日数などを記入してください"
-                          value={alertComment[completedSteps] || ''}
-                          onChange={e => setAlertComment(prev => ({ ...prev, [completedSteps]: e.target.value }))}
-                          className="w-full text-xs border border-orange-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400 resize-none"
-                        />
-                        <div className="flex gap-2 justify-end">
+              return (
+                <div className="mt-4 border-t border-slate-200 pt-4 space-y-4">
+                  {/* 作業開始チェックシート */}
+                  {!isStarted && startItems.length > 0 && (
+                    <div className={`rounded-xl border-2 p-4 transition-all ${startOutOfSpec.length > 0 ? 'border-red-400 bg-red-50' : startAllOk ? 'border-green-400 bg-green-50/40' : 'border-blue-300 bg-blue-50/30'}`}>
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2">
+                          📋 作業開始チェックシート（{stepName}）
+                          {startAllOk && <span className="text-xs text-green-600 font-normal">✅ 規格内</span>}
+                          {startOutOfSpec.length > 0 && <span className="text-xs text-red-700 font-bold">❌ 規格外あり</span>}
+                        </h4>
+                        <span className="text-xs text-slate-400">{startItems.filter(c => startVals[c.item] !== undefined && startVals[c.item] !== '').length}/{startItems.length} 入力済</span>
+                      </div>
+                      <table className="w-full text-sm mb-3">
+                        <thead className="bg-slate-50">
+                          <tr>
+                            {['測定項目', '規格値（Min〜Max）', '実測値', '判定'].map(h => (
+                              <th key={h} className="text-left py-1.5 px-2 text-xs font-medium text-slate-500">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {startItems.map(c => {
+                            const v = startVals[c.item];
+                            const isEmpty = v === undefined || v === '';
+                            const n = isEmpty ? null : Number(v);
+                            const isOk = n !== null && n >= c.specMin && n <= c.specMax;
+                            const isOut = n !== null && !isOk;
+                            return (
+                              <tr key={c.item} className={`border-b border-slate-100 ${isOut ? 'bg-red-50' : ''}`}>
+                                <td className="py-2 px-2 text-xs font-medium text-slate-700">{c.item}</td>
+                                <td className="py-2 px-2 text-xs font-mono text-slate-500">{c.specMin} 〜 {c.specMax} {c.unit}</td>
+                                <td className="py-2 px-2">
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number" step="0.01"
+                                      className={`input-field text-xs w-24 text-right font-mono ${isOut ? 'border-red-400 bg-red-100 text-red-700 font-bold' : ''}`}
+                                      value={v ?? ''}
+                                      onChange={e => {
+                                        const newV = e.target.value;
+                                        setStartCheckValues(prev => ({
+                                          ...prev,
+                                          [stepKey]: { ...(prev[stepKey] || {}), [c.item]: newV },
+                                        }));
+                                        if (newV !== '') {
+                                          const num = Number(newV);
+                                          if (num < c.specMin || num > c.specMax) {
+                                            setStartCheckAlert({ item: c.item, actual: num, specMin: c.specMin, specMax: c.specMax, unit: c.unit });
+                                          } else {
+                                            setStartCheckAlert(null);
+                                          }
+                                        }
+                                      }}
+                                      placeholder="実測値"
+                                    />
+                                    <span className="text-xs text-slate-400">{c.unit}</span>
+                                  </div>
+                                </td>
+                                <td className="py-2 px-2 text-xs text-center">
+                                  {isEmpty ? <span className="text-slate-300">—</span>
+                                    : isOk ? <span className="text-green-600 font-bold">✅ OK</span>
+                                    : <span className="text-red-600 font-bold">❌ NG</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                      {startOutOfSpec.length > 0 && (
+                        <div className="mb-3 p-3 bg-red-100 border border-red-300 rounded-xl">
+                          <div className="text-sm font-bold text-red-700 mb-1">⚠️ 規格外の測定値があります！</div>
+                          {startOutOfSpec.map(c => (
+                            <div key={c.item} className="text-xs text-red-700">
+                              【{c.item}】実測: {startVals[c.item]} {c.unit} → 規格: {c.specMin}〜{c.specMax} {c.unit}
+                            </div>
+                          ))}
+                          <div className="text-xs text-red-500 mt-1.5 font-medium">作業を一時停止し、設備の調整を行ってください。</div>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-slate-500">
+                          {!startFilled ? '⚠️ 全項目を入力してください'
+                            : startOutOfSpec.length > 0 ? '❌ 規格外があります'
+                            : '✅ 開始可能です'}
+                        </span>
+                        <button
+                          disabled={!startAllOk}
+                          onClick={() => setStartCheckConfirmed(prev => ({ ...prev, [stepKey]: true }))}
+                          className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${startAllOk ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
+                          開始確認 →
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 開始確認済みバッジ */}
+                  {isStarted && startItems.length > 0 && (
+                    <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                      ✅ 【{stepName}】作業開始チェック済み
+                    </div>
+                  )}
+
+                  {/* 完了チェックシート（開始確認後 or 開始チェック項目なし） */}
+                  {(isStarted || startItems.length === 0) && (
+                    <div className={`rounded-xl border-2 p-4 transition-all ${canCompleteStep ? 'border-green-400 bg-green-50/30' : 'border-indigo-200 bg-indigo-50/20'}`}>
+                      <h4 className="font-semibold text-slate-800 text-sm mb-3 flex items-center gap-2">
+                        📝 完了チェックシート（{stepName}）
+                        {canCompleteStep && <span className="text-xs text-green-600 font-normal">✅ 完了可能</span>}
+                      </h4>
+
+                      {/* 測定値入力 */}
+                      {stepMeas.length > 0 && (
+                        <div className="mb-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-xs font-bold text-slate-600">📏 測定値入力</span>
+                            {measAllFilled && measOutOfSpec.length === 0 && <span className="text-green-600 text-xs">✅ 規格内</span>}
+                            {measAllFilled && measOutOfSpec.length > 0 && <span className="text-red-600 text-xs font-bold">❌ 規格外あり</span>}
+                            {!measAllFilled && <span className="text-orange-500 text-xs">⚠ 未入力あり</span>}
+                          </div>
+                          <table className="w-full text-sm">
+                            <thead className="bg-slate-50">
+                              <tr>
+                                {['測定項目', '規格値（公差）', '実測値', '判定'].map(h => (
+                                  <th key={h} className="text-left py-1.5 px-2 text-xs font-medium text-slate-500">{h}</th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {stepMeas.map((m, i) => {
+                                const isEmpty = m.actual === '' || m.actual === null || m.actual === undefined;
+                                const val = isEmpty ? null : Number(m.actual);
+                                const isOk = val !== null &&
+                                  (m.specMin === null || val >= m.specMin) &&
+                                  (m.specMax === null || val <= m.specMax);
+                                const isOut = val !== null && !isOk;
+                                return (
+                                  <tr key={m.item} className={`border-b border-slate-100 ${isOut ? 'bg-red-50' : ''}`}>
+                                    <td className="py-1.5 px-2 text-xs font-medium text-slate-700">{m.item}</td>
+                                    <td className="py-1.5 px-2 text-xs text-slate-500 font-mono">{m.specMin} 〜 {m.specMax} {m.unit}</td>
+                                    <td className="py-1.5 px-2">
+                                      <div className="flex items-center gap-1">
+                                        <input
+                                          type="number" step="0.01"
+                                          className={`input-field text-xs w-24 text-right font-mono ${isOut ? 'border-red-400 bg-red-50 text-red-700 font-bold' : ''}`}
+                                          value={m.actual ?? ''}
+                                          onChange={e => handleMeasurementChange(stepName, i, e.target.value)}
+                                          placeholder="実測値"
+                                        />
+                                        <span className="text-xs text-slate-400">{m.unit}</span>
+                                      </div>
+                                    </td>
+                                    <td className="py-1.5 px-2 text-xs text-center">
+                                      {isEmpty ? <span className="text-slate-300">—</span>
+                                        : isOk ? <span className="text-green-600">✅</span>
+                                        : <span className="text-red-600 font-bold">❌ 規格外</span>}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* 完了確認チェックボックス */}
+                      <div className="space-y-2 mb-4">
+                        <div className="text-xs font-bold text-slate-600 mb-1">✔ 完了確認チェック</div>
+                        {endBoolItems.map(label => (
+                          <div key={label} className="flex items-center gap-3">
+                            <span className="text-xs font-medium text-slate-700 w-36">{label}</span>
+                            <div className="flex gap-2">
+                              {['OK', 'NG'].map(v => (
+                                <label key={v} className="flex items-center gap-1 cursor-pointer select-none">
+                                  <input type="radio" name={`end-${stepKey}-${label}`} value={v}
+                                    checked={endVals[label] === v}
+                                    onChange={() => setEndCheckValues(prev => ({
+                                      ...prev,
+                                      [stepKey]: { ...(prev[stepKey] || {}), [label]: v },
+                                    }))}
+                                  />
+                                  <span className={`text-xs font-bold ${v === 'OK' ? 'text-green-700' : 'text-red-600'}`}>{v}</span>
+                                </label>
+                              ))}
+                            </div>
+                            {endVals[label] && (
+                              <span className={`text-xs ${endVals[label] === 'OK' ? 'text-green-600' : 'text-red-600 font-bold'}`}>
+                                {endVals[label] === 'OK' ? '✅' : '❌'}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="text-xs text-slate-500">
+                          {!measAllFilled && <span className="text-orange-600">⚠️ 未入力の測定値があります</span>}
+                          {measAllFilled && measOutOfSpec.length > 0 && (
+                            <span className="text-red-600">❌ 規格外の値があります。責任者承認で強制完了できます</span>
+                          )}
+                          {measAllFilled && measOutOfSpec.length === 0 && !endBoolAllOk && (
+                            <span className="text-orange-600">⚠️ 完了確認チェックを入力してください</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {/* 遅延アラート */}
+                          {(() => {
+                            const stepIdx = completedSteps;
+                            const alreadyFiled = delayAlerts?.some(
+                              a => a.orderId === selected.orderId && a.processName === stepName && a.status === 'active'
+                            );
+                            return alreadyFiled ? (
+                              <span className="text-xs text-orange-600 font-medium px-2 py-1 bg-orange-50 border border-orange-200 rounded-lg">
+                                🔔 遅延アラート発出済み
+                              </span>
+                            ) : (
+                              <button
+                                onClick={() => setAlertFormOpen(prev => ({ ...prev, [stepIdx]: !prev[stepIdx] }))}
+                                className="px-2.5 py-1.5 rounded-lg text-xs font-bold bg-orange-100 text-orange-700 border border-orange-200 hover:bg-orange-200 transition-colors">
+                                🔔 遅延アラート発出
+                              </button>
+                            );
+                          })()}
+                          {measAllFilled && measOutOfSpec.length > 0 && (
+                            <button
+                              onClick={() => { setPendingStepIndex(completedSteps); setShowForceComplete(true); }}
+                              className="bg-red-100 text-red-700 border border-red-300 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-red-200">
+                              ⚠️ 強制完了（責任者）
+                            </button>
+                          )}
                           <button
-                            onClick={() => setAlertFormOpen(prev => ({ ...prev, [completedSteps]: false }))}
-                            className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
-                            キャンセル
-                          </button>
-                          <button
-                            disabled={!(alertComment[completedSteps] || '').trim()}
-                            onClick={() => handleSubmitDelayAlert(completedSteps)}
-                            className="text-xs px-4 py-1.5 rounded-lg bg-orange-500 text-white font-bold hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed">
-                            発出する
+                            onClick={() => handleStepToggle(completedSteps)}
+                            disabled={!canCompleteStep}
+                            className={`px-5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                              canCompleteStep
+                                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                                : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                            }`}>
+                            この工程を完了 ✓
                           </button>
                         </div>
                       </div>
-                    )}
-                  </div>
+
+                      {/* 遅延アラート入力フォーム */}
+                      {alertFormOpen[completedSteps] && (
+                        <div className="mt-3 p-3 rounded-lg bg-orange-50 border border-orange-200 space-y-2">
+                          <div className="text-xs font-bold text-orange-700">🔔 遅延アラート発出</div>
+                          <input
+                            type="text"
+                            placeholder="担当者名"
+                            value={alertBy[completedSteps] || ''}
+                            onChange={e => setAlertBy(prev => ({ ...prev, [completedSteps]: e.target.value }))}
+                            className="w-full text-xs border border-orange-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                          />
+                          <textarea
+                            rows={2}
+                            placeholder="遅延理由・見込み日数などを記入してください"
+                            value={alertComment[completedSteps] || ''}
+                            onChange={e => setAlertComment(prev => ({ ...prev, [completedSteps]: e.target.value }))}
+                            className="w-full text-xs border border-orange-200 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-orange-400 resize-none"
+                          />
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => setAlertFormOpen(prev => ({ ...prev, [completedSteps]: false }))}
+                              className="text-xs px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-600 hover:bg-slate-50">
+                              キャンセル
+                            </button>
+                            <button
+                              disabled={!(alertComment[completedSteps] || '').trim()}
+                              onClick={() => handleSubmitDelayAlert(completedSteps)}
+                              className="text-xs px-4 py-1.5 rounded-lg bg-orange-500 text-white font-bold hover:bg-orange-600 disabled:opacity-40 disabled:cursor-not-allowed">
+                              発出する
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })()}
@@ -1140,53 +1213,95 @@ export default function ManufacturingReport() {
             )}
           </div>
 
-          {/* 使用材料ロット（複数ロット対応） */}
+          {/* 使用材料ロット（BOM材料別・複数ロット対応） */}
           {(() => {
+            // BOMベースの材料別ロット管理
+            const materialLotMap = selected.materialLotMap ?? {};
+            const updateMaterialLot = (materialId, lotIdx, val) => {
+              const current = materialLotMap[materialId] || [''];
+              const next = current.map((l, i) => i === lotIdx ? val : l);
+              syncSelected({ ...selected, materialLotMap: { ...materialLotMap, [materialId]: next } });
+            };
+            const addMaterialLot = (materialId) => {
+              const current = materialLotMap[materialId] || [''];
+              syncSelected({ ...selected, materialLotMap: { ...materialLotMap, [materialId]: [...current, ''] } });
+            };
+            const removeMaterialLot = (materialId, lotIdx) => {
+              const current = materialLotMap[materialId] || [''];
+              if (current.length <= 1) return;
+              const next = current.filter((_, i) => i !== lotIdx);
+              syncSelected({ ...selected, materialLotMap: { ...materialLotMap, [materialId]: next } });
+            };
+            // BOMがある場合は材料別管理、ない場合は旧来のフラットリスト
+            if (bom.length > 0) {
+              return (
+                <div className="card">
+                  <h3 className="font-semibold text-slate-800 mb-3">使用材料ロットNo.（トレーサビリティ）</h3>
+                  <div className="space-y-3">
+                    {bom.map(b => {
+                      const lots = materialLotMap[b.materialId] || [''];
+                      return (
+                        <div key={b.materialId} className="border border-slate-100 rounded-lg p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded">
+                              {b.materialName}
+                            </span>
+                            <button onClick={() => addMaterialLot(b.materialId)}
+                              className="text-xs text-blue-600 hover:text-blue-800">＋ ロット追加</button>
+                          </div>
+                          <div className="space-y-1.5">
+                            {lots.map((lot, i) => (
+                              <div key={i} className="flex items-center gap-2">
+                                <span className="text-xs text-slate-400 w-4 text-right flex-shrink-0">{i + 1}</span>
+                                <input
+                                  className="input-field flex-1 max-w-xs font-mono text-sm"
+                                  value={lot}
+                                  onChange={e => updateMaterialLot(b.materialId, i, e.target.value)}
+                                  placeholder="LOT番号を入力"
+                                />
+                                <button className="btn-secondary text-xs px-2">📷</button>
+                                {lot && <span className="text-green-600 text-xs">✓</span>}
+                                {lots.length > 1 && (
+                                  <button onClick={() => removeMaterialLot(b.materialId, i)}
+                                    className="text-slate-300 hover:text-red-500 text-sm">×</button>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            // フォールバック: BOMなしの旧来リスト
             const lots = selected.materialLots ?? (selected.materialLot ? [selected.materialLot] : ['']);
             const updateLot = (i, val) => {
               const next = lots.map((l, idx) => idx === i ? val : l);
-              syncSelected({ ...selected, materialLots: next, materialLot: next[0] || '' });
-            };
-            const addLot = () => syncSelected({
-              ...selected,
-              materialLots: [...lots, ''],
-              materialLot: selected.materialLot || '',
-            });
-            const removeLot = (i) => {
-              if (lots.length <= 1) return;
-              const next = lots.filter((_, idx) => idx !== i);
               syncSelected({ ...selected, materialLots: next, materialLot: next[0] || '' });
             };
             return (
               <div className="card">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="font-semibold text-slate-800">使用材料ロットNo.（トレーサビリティ）</h3>
-                  <button onClick={addLot} className="btn-secondary text-xs">＋ ロット追加</button>
+                  <button onClick={() => syncSelected({ ...selected, materialLots: [...lots, ''] })} className="btn-secondary text-xs">＋ ロット追加</button>
                 </div>
                 <div className="space-y-2">
                   {lots.map((lot, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <span className="text-xs text-slate-400 w-5 text-right flex-shrink-0">{i + 1}</span>
-                      <input
-                        className="input-field flex-1 max-w-xs font-mono"
-                        value={lot}
-                        onChange={e => updateLot(i, e.target.value)}
-                        placeholder="LOT番号を入力またはバーコードスキャン"
-                      />
+                      <input className="input-field flex-1 max-w-xs font-mono" value={lot}
+                        onChange={e => updateLot(i, e.target.value)} placeholder="LOT番号を入力またはバーコードスキャン" />
                       <button className="btn-secondary text-xs px-2">📷</button>
                       {lot && <span className="text-green-600 text-xs">✅ {lot}</span>}
                       {lots.length > 1 && (
-                        <button onClick={() => removeLot(i)}
-                          className="text-slate-300 hover:text-red-500 text-sm transition-colors">×</button>
+                        <button onClick={() => { const next = lots.filter((_, idx) => idx !== i); syncSelected({ ...selected, materialLots: next, materialLot: next[0] || '' }); }}
+                          className="text-slate-300 hover:text-red-500 text-sm">×</button>
                       )}
                     </div>
                   ))}
                 </div>
-                {lots.filter(Boolean).length > 1 && (
-                  <div className="mt-2 text-xs text-slate-400">
-                    ロット {lots.filter(Boolean).length}件 登録済み
-                  </div>
-                )}
               </div>
             );
           })()}
@@ -1321,124 +1436,6 @@ export default function ManufacturingReport() {
             </div>
           </div>
 
-          {/* 作業終了チェックシート（全工程完了後に表示） */}
-          {allStepsComplete && selected.status !== '完了' && selectedProduct?.spec && (() => {
-            const ordId = selected.id;
-            const vals  = endCheckValues[ordId] || {};
-            const submitted = endCheckSubmitted[ordId] || false;
-
-            const numItems = [
-              { item:'最終外径', specMin: selectedProduct.spec.outerDiameter?.min, specMax: selectedProduct.spec.outerDiameter?.max, unit:'mm' },
-              { item:'最終肉厚', specMin: selectedProduct.spec.wallThickness?.min,  specMax: selectedProduct.spec.wallThickness?.max,  unit:'mm' },
-            ].filter(c => c.specMin != null && c.specMax != null);
-
-            const boolItems = ['外観・傷確認', '刻印・マーキング確認', '清掃完了'];
-
-            const numOk    = numItems.every(c => {
-              const v = vals[c.item];
-              if (!v && v !== 0) return false;
-              const n = Number(v);
-              return n >= c.specMin && n <= c.specMax;
-            });
-            const boolOk   = boolItems.every(c => vals[c] === 'OK');
-            const allOk    = numOk && boolOk;
-
-            return (
-              <div className={`card border-2 transition-all ${submitted && allOk ? 'border-green-400 bg-green-50' : allOk ? 'border-green-400' : 'border-indigo-300 bg-indigo-50/40'}`}>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                    📋 作業終了チェックシート
-                    {submitted && allOk && <span className="text-xs text-green-600">✅ チェック完了</span>}
-                  </h3>
-                  <span className="text-xs text-slate-400 font-medium">全工程完了後の最終確認</span>
-                </div>
-
-                {/* 数値測定 */}
-                <table className="w-full text-sm mb-3">
-                  <thead className="bg-slate-50">
-                    <tr>
-                      {['測定項目', '規格値（Min〜Max）', '実測値', '判定'].map(h => (
-                        <th key={h} className="text-left py-1.5 px-2 text-xs font-medium text-slate-500">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {numItems.map(c => {
-                      const v  = vals[c.item];
-                      const isEmpty = v === undefined || v === '';
-                      const n  = isEmpty ? null : Number(v);
-                      const isOk  = n !== null && n >= c.specMin && n <= c.specMax;
-                      const isOut = n !== null && !isOk;
-                      return (
-                        <tr key={c.item} className={`border-b border-slate-100 ${isOut ? 'bg-red-50' : ''}`}>
-                          <td className="py-2 px-2 text-xs font-medium text-slate-700">{c.item}</td>
-                          <td className="py-2 px-2 text-xs font-mono text-slate-500">{c.specMin} 〜 {c.specMax} {c.unit}</td>
-                          <td className="py-2 px-2">
-                            <div className="flex items-center gap-1">
-                              <input type="number" step="0.01"
-                                className={`input-field text-xs w-24 text-right font-mono ${isOut ? 'border-red-400 bg-red-100 text-red-700' : ''}`}
-                                value={v ?? ''}
-                                disabled={submitted && allOk}
-                                onChange={e => setEndCheckValues(prev => ({ ...prev, [ordId]: { ...(prev[ordId] || {}), [c.item]: e.target.value } }))}
-                                placeholder="実測値" />
-                              <span className="text-xs text-slate-400">{c.unit}</span>
-                            </div>
-                          </td>
-                          <td className="py-2 px-2 text-xs text-center">
-                            {isEmpty ? <span className="text-slate-300">—</span>
-                              : isOk  ? <span className="text-green-600 font-bold">✅ OK</span>
-                              : <span className="text-red-600 font-bold">❌ NG</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-
-                {/* 目視確認チェックボックス */}
-                <div className="space-y-2 mb-4">
-                  {boolItems.map(label => (
-                    <div key={label} className="flex items-center gap-3">
-                      <span className="text-xs font-medium text-slate-700 w-36">{label}</span>
-                      <div className="flex gap-2">
-                        {['OK', 'NG'].map(v => (
-                          <label key={v} className="flex items-center gap-1 cursor-pointer select-none">
-                            <input type="radio" name={`end-${ordId}-${label}`} value={v}
-                              checked={vals[label] === v}
-                              disabled={submitted && allOk}
-                              onChange={() => setEndCheckValues(prev => ({ ...prev, [ordId]: { ...(prev[ordId] || {}), [label]: v } }))}
-                            />
-                            <span className={`text-xs font-bold ${v === 'OK' ? 'text-green-700' : 'text-red-600'}`}>{v}</span>
-                          </label>
-                        ))}
-                      </div>
-                      {vals[label] && (
-                        <span className={`text-xs ${vals[label] === 'OK' ? 'text-green-600' : 'text-red-600 font-bold'}`}>
-                          {vals[label] === 'OK' ? '✅' : '❌'}
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-slate-500">
-                    {allOk
-                      ? <span className="text-green-600 font-medium">✅ 全項目確認済み — 製造完了を登録できます</span>
-                      : <span className="text-orange-600">⚠️ 全項目を確認してください</span>}
-                  </span>
-                  {!submitted && (
-                    <button
-                      disabled={!allOk}
-                      onClick={() => setEndCheckSubmitted(prev => ({ ...prev, [ordId]: true }))}
-                      className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${allOk ? 'bg-indigo-600 text-white hover:bg-indigo-700' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}>
-                      終了チェック完了
-                    </button>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
 
           {/* 製造完了登録 */}
           <div className="card">
@@ -1447,10 +1444,8 @@ export default function ManufacturingReport() {
                 {selected?.status === '完了'
                   ? <span className="text-green-600">✅ 製造完了済み</span>
                   : !allStepsComplete
-                  ? <span className="text-orange-600">⚠️ 全工程の完了チェックが必要です</span>
-                  : !endCheckSubmitted[selected?.id]
-                  ? <span className="text-orange-600">⚠️ 作業終了チェックシートの確認が必要です</span>
-                  : <span className="text-green-600">✅ 全工程・終了チェック完了 — 製造完了を登録できます</span>}
+                  ? <span className="text-orange-600">⚠️ 全工程の完了チェックシートを入力してください</span>
+                  : <span className="text-green-600">✅ 全工程完了 — 製造完了を登録できます</span>}
               </div>
               <button
                 onClick={() => canComplete && setShowCompleteConfirm(true)}
