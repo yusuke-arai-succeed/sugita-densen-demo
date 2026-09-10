@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 
 // デプロイごとに更新するバージョン情報
 const APP_VERSION = 'v1.4';
@@ -92,6 +93,7 @@ const allNavItems = [...navItems, ...masterItems];
 
 export default function Layout({ children }) {
   const { activeApp, setActiveApp, deadlineAlerts, orders, mfgOrders, materialIssuances, currentStock, materialReorderConfig, delayAlerts, techRequests, inventory, fractionRule, setFractionRule } = useApp();
+  const { user, signOut } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFractionSettings, setShowFractionSettings] = useState(false);
 
@@ -371,16 +373,34 @@ export default function Layout({ children }) {
         </nav>
 
         {/* ユーザー情報 */}
-        <div className={`border-t border-slate-200 ${collapsed ? 'px-2 py-4 flex justify-center' : 'px-4 py-4'}`}>
+        <div className={`border-t border-slate-200 ${collapsed ? 'px-2 py-4 flex flex-col items-center gap-2' : 'px-4 py-4'}`}>
           {collapsed ? (
-            <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 text-sm" title="細野 様（管理者）">細</div>
+            <>
+              <div
+                className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold"
+                title={user?.email}
+              >
+                {user?.email?.[0]?.toUpperCase() ?? '?'}
+              </div>
+              <button
+                onClick={signOut}
+                title="ログアウト"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm"
+              >⏻</button>
+            </>
           ) : (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 text-sm">細</div>
-              <div>
-                <div className="text-xs font-medium text-slate-700">細野 様</div>
-                <div className="text-xs text-slate-400">管理者</div>
+              <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold flex-shrink-0">
+                {user?.email?.[0]?.toUpperCase() ?? '?'}
               </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-slate-700 truncate">{user?.email}</div>
+              </div>
+              <button
+                onClick={signOut}
+                title="ログアウト"
+                className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 transition-colors text-sm"
+              >⏻</button>
             </div>
           )}
         </div>

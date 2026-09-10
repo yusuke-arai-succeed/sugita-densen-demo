@@ -1,5 +1,5 @@
 import { AppProvider, useApp } from './context/AppContext';
-import AuthGate from './components/AuthGate';
+import { AuthProvider } from './context/AuthContext';
 import Layout from './components/Layout';
 import Dashboard from './components/Dashboard';
 import ProductMaster from './components/ProductMaster';
@@ -50,10 +50,10 @@ function AppContent() {
 
 export default function App() {
   return (
-    <AuthGate>
+    <AuthProvider>
       <AppProvider>
         <AppContent />
       </AppProvider>
-    </AuthGate>
+    </AuthProvider>
   );
 }
