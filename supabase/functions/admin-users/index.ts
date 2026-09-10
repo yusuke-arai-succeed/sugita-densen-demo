@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
 }
 
 Deno.serve(async (req) => {
@@ -12,11 +12,8 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Verify caller is authenticated and is admin
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return json({ error: '認証が必要です' }, 401)
-    }
+    if (!authHeader) return json({ error: '認証が必要です' }, 401)
 
     const supabaseUser = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -25,16 +22,10 @@ Deno.serve(async (req) => {
     )
 
     const { data: { user }, error: userError } = await supabaseUser.auth.getUser()
-    if (userError || !user) {
-      return json({ error: '認証が必要です' }, 401)
-    }
+    if (userError || !user) return json({ error: '認証が必要です' }, 401)
 
-    const role = user.user_metadata?.role
-    if (role !== 'admin') {
-      return json({ error: '管理者権限が必要です' }, 403)
-    }
+    if (user.user_metadata?.role !== 'admin') return json({ error: '管理者権限が必要です' }, 403)
 
-    // Use service role for admin operations
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
@@ -43,6 +34,7 @@ Deno.serve(async (req) => {
 
     const method = req.method
 
+    // ── ユーザー一覧 ──────────────────────────────────
     if (method === 'GET') {
       const { data, error } = await supabaseAdmin.auth.admin.listUsers()
       if (error) return json({ error: error.message }, 500)
@@ -50,65 +42,80 @@ Deno.serve(async (req) => {
       const users = data.users.map(u => ({
         id: u.id,
         email: u.email,
-        employee_id: u.user_metadata?.employee_id ?? '',
+        employee_id:  u.user_metadata?.employee_id  ?? '',
         display_name: u.user_metadata?.display_name ?? '',
-        role: u.user_metadata?.role ?? 'viewer',
-        created_at: u.created_at,
+        department:   u.user_metadata?.department   ?? '',
+        position:     u.user_metadata?.position     ?? '',
+        role:         u.user_metadata?.role         ?? 'viewer',
+        created_at:      u.created_at,
         last_sign_in_at: u.last_sign_in_at,
       }))
-
       return json({ users })
     }
 
+    // ── ユーザー作成 ──────────────────────────────────
     if (method === 'POST') {
-      const { email, password, role: newRole, display_name, employee_id } = await req.json()
-      if (!email || !password) {
-        return json({ error: 'メールアドレスとパスワードは必須です' }, 400)
-      }
+      const { email, password, role: newRole, display_name, employee_id, department, position } = await req.json()
+      if (!email || !password) return json({ error: 'メールアドレスとパスワードは必須です' }, 400)
 
       const { data, error } = await supabaseAdmin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { role: newRole ?? 'viewer', display_name: display_name ?? '', employee_id: employee_id ?? '' },
+        user_metadata: {
+          role:         newRole      ?? 'viewer',
+          display_name: display_name ?? '',
+          employee_id:  employee_id  ?? '',
+          department:   department   ?? '',
+          position:     position     ?? '',
+        },
       })
       if (error) return json({ error: error.message }, 500)
-
       return json({ user: data.user })
     }
 
+    // ── ユーザー更新 ──────────────────────────────────
     if (method === 'PATCH') {
-      const { user_id, role: newRole, display_name } = await req.json()
-      if (!user_id || !newRole) {
-        return json({ error: 'user_id と role は必須です' }, 400)
-      }
+      const { user_id, role: newRole, display_name, department, position } = await req.json()
+      if (!user_id || !newRole) return json({ error: 'user_id と role は必須です' }, 400)
 
-      // Fetch existing metadata first to merge (not overwrite)
       const { data: existing } = await supabaseAdmin.auth.admin.getUserById(user_id)
       const existingMeta = existing?.user?.user_metadata ?? {}
 
       const { data, error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-        user_metadata: { ...existingMeta, role: newRole, display_name: display_name ?? existingMeta.display_name ?? '' },
+        user_metadata: {
+          ...existingMeta,
+          role:         newRole,
+          display_name: display_name ?? existingMeta.display_name ?? '',
+          department:   department   ?? existingMeta.department   ?? '',
+          position:     position     ?? existingMeta.position     ?? '',
+        },
       })
       if (error) return json({ error: error.message }, 500)
-
       return json({ user: data.user })
     }
 
+    // ── ユーザー削除 ──────────────────────────────────
     if (method === 'DELETE') {
       const { user_id } = await req.json()
-      if (!user_id) {
-        return json({ error: 'user_id は必須です' }, 400)
-      }
-
-      // Prevent self-deletion
-      if (user_id === user.id) {
-        return json({ error: '自分自身は削除できません' }, 400)
-      }
+      if (!user_id) return json({ error: 'user_id は必須です' }, 400)
+      if (user_id === user.id) return json({ error: '自分自身は削除できません' }, 400)
 
       const { error } = await supabaseAdmin.auth.admin.deleteUser(user_id)
       if (error) return json({ error: error.message }, 500)
+      return json({ success: true })
+    }
 
+    // ── ロールデフォルト更新 (PUT) ─────────────────────
+    if (method === 'PUT') {
+      const { resource, department, position, role } = await req.json()
+      if (resource !== 'role-defaults') return json({ error: 'unknown resource' }, 400)
+      if (!department || !position || !role) return json({ error: 'department/position/role は必須です' }, 400)
+
+      const { error } = await supabaseAdmin
+        .from('role_defaults')
+        .upsert({ department, position, role }, { onConflict: 'department,position' })
+      if (error) return json({ error: error.message }, 500)
       return json({ success: true })
     }
 
