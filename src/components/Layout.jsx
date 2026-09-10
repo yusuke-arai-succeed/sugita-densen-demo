@@ -92,11 +92,61 @@ const masterItems = [
 // 全項目（ヘッダータイトル検索用）
 const allNavItems = [...navItems, ...masterItems, { id: 'settings', label: '設定', icon: '⚙️' }];
 
+function EditDisplayNameModal({ onClose }) {
+  const { displayName, updateDisplayName } = useAuth();
+  const [value, setValue] = useState(displayName);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!value.trim()) return;
+    setLoading(true);
+    const { error } = await updateDisplayName(value.trim());
+    if (error) { setError(error.message); setLoading(false); }
+    else onClose();
+  };
+
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm">
+        <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+          <h2 className="font-bold text-slate-800">表示名の変更</h2>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600 text-xl leading-none">✕</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-xs font-medium text-slate-600 mb-1">表示名</label>
+            <input
+              type="text"
+              value={value}
+              onChange={e => setValue(e.target.value)}
+              required
+              autoFocus
+              maxLength={50}
+              className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="例：細野 一郎"
+            />
+          </div>
+          {error && <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>}
+          <div className="flex gap-3">
+            <button type="button" onClick={onClose} className="btn-secondary flex-1 text-sm">キャンセル</button>
+            <button type="submit" disabled={loading} className="btn-primary flex-1 text-sm">
+              {loading ? '保存中...' : '保存する'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function Layout({ children }) {
   const { activeApp, setActiveApp, deadlineAlerts, orders, mfgOrders, materialIssuances, currentStock, materialReorderConfig, delayAlerts, techRequests, inventory, fractionRule, setFractionRule } = useApp();
-  const { user, signOut, role, isAdmin } = useAuth();
+  const { user, signOut, role, isAdmin, displayName } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFractionSettings, setShowFractionSettings] = useState(false);
+  const [showEditName, setShowEditName] = useState(false);
 
   // ダークモード
   const [darkMode, setDarkMode] = useState(() => {
@@ -287,13 +337,14 @@ export default function Layout({ children }) {
       )}
       <div className="px-4 py-4 border-t border-slate-200">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold">
-            {user?.email?.[0]?.toUpperCase() ?? '?'}
+          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold flex-shrink-0">
+            {displayName?.[0]?.toUpperCase() ?? '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-medium text-slate-700 truncate">{user?.email}</div>
+            <div className="text-xs font-medium text-slate-700 truncate">{displayName}</div>
             <div className="text-xs text-slate-400">{ROLE_LABELS[role] || role}</div>
           </div>
+          <button onClick={() => setShowEditName(true)} title="表示名を変更" className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 text-xs">✏️</button>
           <button onClick={signOut} title="ログアウト" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 text-sm">⏻</button>
         </div>
       </div>
@@ -398,10 +449,15 @@ export default function Layout({ children }) {
             <>
               <div
                 className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold"
-                title={user?.email}
+                title={displayName}
               >
-                {user?.email?.[0]?.toUpperCase() ?? '?'}
+                {displayName?.[0]?.toUpperCase() ?? '?'}
               </div>
+              <button
+                onClick={() => setShowEditName(true)}
+                title="表示名を変更"
+                className="w-8 h-8 flex items-center justify-center rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors text-xs"
+              >✏️</button>
               <button
                 onClick={signOut}
                 title="ログアウト"
@@ -411,11 +467,17 @@ export default function Layout({ children }) {
           ) : (
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold flex-shrink-0">
-                {user?.email?.[0]?.toUpperCase() ?? '?'}
+                {displayName?.[0]?.toUpperCase() ?? '?'}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-slate-700 truncate">{user?.email}</div>
+                <div className="text-xs font-medium text-slate-700 truncate">{displayName}</div>
+                <div className="text-xs text-slate-400">{ROLE_LABELS[role] || role}</div>
               </div>
+              <button
+                onClick={() => setShowEditName(true)}
+                title="表示名を変更"
+                className="flex-shrink-0 p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors text-xs"
+              >✏️</button>
               <button
                 onClick={signOut}
                 title="ログアウト"
@@ -495,6 +557,7 @@ export default function Layout({ children }) {
           onClose={() => setShowFractionSettings(false)}
         />
       )}
+      {showEditName && <EditDisplayNameModal onClose={() => setShowEditName(false)} />}
     </div>
   );
 }

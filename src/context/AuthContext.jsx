@@ -27,15 +27,24 @@ export function AuthProvider({ children }) {
 
   const signOut = () => supabase.auth.signOut();
 
+  const updateDisplayName = async (displayName) => {
+    const { data, error } = await supabase.auth.updateUser({
+      data: { display_name: displayName },
+    });
+    if (!error) setUser(data.user);
+    return { error };
+  };
+
   const role = getRoleFromUser(user);
   const isAdmin = role === ROLES.ADMIN;
   const isOperator = role === ROLES.OPERATOR || role === ROLES.ADMIN;
+  const displayName = user?.user_metadata?.display_name || user?.email || '';
 
   if (loading) return null;
   if (!user) return <LoginForm />;
 
   return (
-    <AuthContext.Provider value={{ user, signOut, role, isAdmin, isOperator }}>
+    <AuthContext.Provider value={{ user, signOut, role, isAdmin, isOperator, displayName, updateDisplayName }}>
       {children}
     </AuthContext.Provider>
   );

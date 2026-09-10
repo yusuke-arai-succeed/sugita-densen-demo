@@ -89,32 +89,32 @@ export default function Settings() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="text-left text-xs font-medium text-slate-500 px-6 py-3">メールアドレス</th>
+                  <th className="text-left text-xs font-medium text-slate-500 px-6 py-3">表示名</th>
+                  <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">メールアドレス</th>
                   <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">権限</th>
                   <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">最終ログイン</th>
-                  <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">作成日</th>
                   <th className="px-4 py-3" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
                 {users.map(u => (
                   <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3 text-sm text-slate-800">{u.email}</td>
+                    <td className="px-6 py-3">
+                      <div className="text-sm font-medium text-slate-800">{u.display_name || <span className="text-slate-400 text-xs">未設定</span>}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-slate-500">{u.email}</td>
                     <td className="px-4 py-3">
                       <RoleBadge role={u.role} />
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
                       {u.last_sign_in_at ? formatDate(u.last_sign_in_at) : '—'}
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">
-                      {formatDate(u.created_at)}
-                    </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">
                         <button
                           onClick={() => setEditingUser(u)}
                           className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
-                        >権限変更</button>
+                        >編集</button>
                         <button
                           onClick={() => handleDelete(u.id, u.email)}
                           className="text-xs text-red-500 hover:text-red-700 hover:underline"
@@ -137,7 +137,7 @@ export default function Settings() {
       )}
 
       {editingUser && (
-        <EditRoleModal
+        <EditUserModal
           user={editingUser}
           onClose={() => setEditingUser(null)}
           onSaved={() => { setEditingUser(null); loadUsers(); }}
@@ -161,6 +161,7 @@ function RoleBadge({ role }) {
 }
 
 function CreateUserModal({ onClose, onCreated }) {
+  const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('operator');
@@ -173,7 +174,7 @@ function CreateUserModal({ onClose, onCreated }) {
     setLoading(true);
     setError('');
     try {
-      await callAdminApi('POST', { email, password, role });
+      await callAdminApi('POST', { email, password, role, display_name: displayName });
       onCreated();
     } catch (e) {
       setError(e.message);
@@ -185,13 +186,24 @@ function CreateUserModal({ onClose, onCreated }) {
     <Modal title="ユーザー追加" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">表示名</label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            autoFocus
+            maxLength={50}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="例：細野 一郎"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">メールアドレス</label>
           <input
             type="email"
             value={email}
             onChange={e => setEmail(e.target.value)}
             required
-            autoFocus
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="user@example.com"
           />
@@ -245,7 +257,8 @@ function CreateUserModal({ onClose, onCreated }) {
   );
 }
 
-function EditRoleModal({ user, onClose, onSaved }) {
+function EditUserModal({ user, onClose, onSaved }) {
+  const [displayName, setDisplayName] = useState(user.display_name || '');
   const [role, setRole] = useState(user.role || 'viewer');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -255,7 +268,7 @@ function EditRoleModal({ user, onClose, onSaved }) {
     setLoading(true);
     setError('');
     try {
-      await callAdminApi('PATCH', { user_id: user.id, role });
+      await callAdminApi('PATCH', { user_id: user.id, role, display_name: displayName });
       onSaved();
     } catch (e) {
       setError(e.message);
@@ -264,10 +277,24 @@ function EditRoleModal({ user, onClose, onSaved }) {
   };
 
   return (
-    <Modal title="権限変更" onClose={onClose}>
+    <Modal title="ユーザー編集" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
+          {user.email}
+        </div>
         <div>
-          <div className="text-xs text-slate-500 mb-3">対象ユーザー：<span className="font-medium text-slate-700">{user.email}</span></div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">表示名</label>
+          <input
+            type="text"
+            value={displayName}
+            onChange={e => setDisplayName(e.target.value)}
+            autoFocus
+            maxLength={50}
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="例：細野 一郎"
+          />
+        </div>
+        <div>
           <label className="block text-xs font-medium text-slate-600 mb-1">権限</label>
           <div className="flex gap-2">
             {ROLE_ORDER.map(r => (

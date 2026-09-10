@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
       const users = data.users.map(u => ({
         id: u.id,
         email: u.email,
+        display_name: u.user_metadata?.display_name ?? '',
         role: u.user_metadata?.role ?? 'viewer',
         created_at: u.created_at,
         last_sign_in_at: u.last_sign_in_at,
@@ -59,7 +60,7 @@ Deno.serve(async (req) => {
     }
 
     if (method === 'POST') {
-      const { email, password, role: newRole } = await req.json()
+      const { email, password, role: newRole, display_name } = await req.json()
       if (!email || !password) {
         return json({ error: 'メールアドレスとパスワードは必須です' }, 400)
       }
@@ -68,7 +69,7 @@ Deno.serve(async (req) => {
         email,
         password,
         email_confirm: true,
-        user_metadata: { role: newRole ?? 'viewer' },
+        user_metadata: { role: newRole ?? 'viewer', display_name: display_name ?? '' },
       })
       if (error) return json({ error: error.message }, 500)
 
@@ -76,13 +77,17 @@ Deno.serve(async (req) => {
     }
 
     if (method === 'PATCH') {
-      const { user_id, role: newRole } = await req.json()
+      const { user_id, role: newRole, display_name } = await req.json()
       if (!user_id || !newRole) {
         return json({ error: 'user_id と role は必須です' }, 400)
       }
 
+      // Fetch existing metadata first to merge (not overwrite)
+      const { data: existing } = await supabaseAdmin.auth.admin.getUserById(user_id)
+      const existingMeta = existing?.user?.user_metadata ?? {}
+
       const { data, error } = await supabaseAdmin.auth.admin.updateUserById(user_id, {
-        user_metadata: { role: newRole },
+        user_metadata: { ...existingMeta, role: newRole, display_name: display_name ?? existingMeta.display_name ?? '' },
       })
       if (error) return json({ error: error.message }, 500)
 
