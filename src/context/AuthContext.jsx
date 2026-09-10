@@ -38,20 +38,24 @@ export function AuthProvider({ children }) {
   const role = getRoleFromUser(user);
   const isAdmin = role === ROLES.ADMIN;
   const isOperator = role === ROLES.OPERATOR || role === ROLES.ADMIN;
-  const displayName = user?.user_metadata?.display_name || user?.email || '';
+  const employeeId = user?.user_metadata?.employee_id || '';
+  const displayName = user?.user_metadata?.display_name || employeeId || user?.email || '';
 
   if (loading) return null;
   if (!user) return <LoginForm />;
 
   return (
-    <AuthContext.Provider value={{ user, signOut, role, isAdmin, isOperator, displayName, updateDisplayName }}>
+    <AuthContext.Provider value={{ user, signOut, role, isAdmin, isOperator, displayName, updateDisplayName, employeeId }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
+export const EMPLOYEE_EMAIL_DOMAIN = 'sugita-ew.com';
+export const toEmail = (employeeId) => `${employeeId}@${EMPLOYEE_EMAIL_DOMAIN}`;
+
 function LoginForm() {
-  const [email, setEmail] = useState('');
+  const [employeeId, setEmployeeId] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -60,9 +64,10 @@ function LoginForm() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    const email = toEmail(employeeId.trim());
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) {
-      setError('メールアドレスまたはパスワードが正しくありません');
+      setError('社員番号またはパスワードが正しくありません');
       setLoading(false);
     }
   };
@@ -87,16 +92,16 @@ function LoginForm() {
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-xs font-medium text-slate-600 mb-1">
-              メールアドレス
+              社員番号
             </label>
             <input
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
+              type="text"
+              value={employeeId}
+              onChange={e => setEmployeeId(e.target.value)}
               required
               autoFocus
               className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="user@example.com"
+              placeholder="例：1001"
             />
           </div>
           <div>

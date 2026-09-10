@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { ROLE_LABELS, ROLE_ORDER } from '../lib/roles';
+import { toEmail } from '../context/AuthContext';
 
 const ADMIN_USERS_URL = `${import.meta.env.VITE_SUPABASE_URL.replace('/rest/v1', '')}/functions/v1/admin-users`;
 
@@ -89,8 +90,8 @@ export default function Settings() {
             <table className="w-full">
               <thead>
                 <tr className="border-b border-slate-100">
-                  <th className="text-left text-xs font-medium text-slate-500 px-6 py-3">表示名</th>
-                  <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">メールアドレス</th>
+                  <th className="text-left text-xs font-medium text-slate-500 px-6 py-3">社員番号</th>
+                  <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">氏名</th>
                   <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">権限</th>
                   <th className="text-left text-xs font-medium text-slate-500 px-4 py-3">最終ログイン</th>
                   <th className="px-4 py-3" />
@@ -99,10 +100,10 @@ export default function Settings() {
               <tbody className="divide-y divide-slate-50">
                 {users.map(u => (
                   <tr key={u.id} className="hover:bg-slate-50 transition-colors">
-                    <td className="px-6 py-3">
+                    <td className="px-6 py-3 text-sm font-mono text-slate-700">{u.employee_id || <span className="text-slate-400 text-xs">—</span>}</td>
+                    <td className="px-4 py-3">
                       <div className="text-sm font-medium text-slate-800">{u.display_name || <span className="text-slate-400 text-xs">未設定</span>}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-slate-500">{u.email}</td>
                     <td className="px-4 py-3">
                       <RoleBadge role={u.role} />
                     </td>
@@ -161,8 +162,8 @@ function RoleBadge({ role }) {
 }
 
 function CreateUserModal({ onClose, onCreated }) {
+  const [employeeId, setEmployeeId] = useState('');
   const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('operator');
   const [loading, setLoading] = useState(false);
@@ -170,11 +171,13 @@ function CreateUserModal({ onClose, onCreated }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!employeeId.trim()) { setError('社員番号を入力してください'); return; }
     if (password.length < 6) { setError('パスワードは6文字以上で入力してください'); return; }
     setLoading(true);
     setError('');
     try {
-      await callAdminApi('POST', { email, password, role, display_name: displayName });
+      const email = toEmail(employeeId.trim());
+      await callAdminApi('POST', { email, password, role, display_name: displayName, employee_id: employeeId.trim() });
       onCreated();
     } catch (e) {
       setError(e.message);
@@ -186,30 +189,33 @@ function CreateUserModal({ onClose, onCreated }) {
     <Modal title="ユーザー追加" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">表示名</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">社員番号 <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            value={employeeId}
+            onChange={e => setEmployeeId(e.target.value)}
+            required
+            autoFocus
+            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="例：1001"
+          />
+          {employeeId && (
+            <p className="text-xs text-slate-400 mt-1">ログインID：{toEmail(employeeId)}</p>
+          )}
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-600 mb-1">氏名（表示名）</label>
           <input
             type="text"
             value={displayName}
             onChange={e => setDisplayName(e.target.value)}
-            autoFocus
             maxLength={50}
             className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
             placeholder="例：細野 一郎"
           />
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">メールアドレス</label>
-          <input
-            type="email"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            required
-            className="w-full px-3 py-2 border border-slate-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="user@example.com"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">パスワード</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">パスワード <span className="text-red-500">*</span></label>
           <input
             type="password"
             value={password}
@@ -279,11 +285,12 @@ function EditUserModal({ user, onClose, onSaved }) {
   return (
     <Modal title="ユーザー編集" onClose={onClose}>
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div className="text-xs text-slate-500 bg-slate-50 rounded-lg px-3 py-2">
-          {user.email}
+        <div className="bg-slate-50 rounded-lg px-3 py-2 flex items-center gap-3">
+          <span className="text-xs font-mono text-slate-700 font-semibold">No.{user.employee_id || '—'}</span>
+          <span className="text-xs text-slate-400">{user.email}</span>
         </div>
         <div>
-          <label className="block text-xs font-medium text-slate-600 mb-1">表示名</label>
+          <label className="block text-xs font-medium text-slate-600 mb-1">氏名（表示名）</label>
           <input
             type="text"
             value={displayName}

@@ -143,7 +143,7 @@ function EditDisplayNameModal({ onClose }) {
 
 export default function Layout({ children }) {
   const { activeApp, setActiveApp, deadlineAlerts, orders, mfgOrders, materialIssuances, currentStock, materialReorderConfig, delayAlerts, techRequests, inventory, fractionRule, setFractionRule } = useApp();
-  const { user, signOut, role, isAdmin, displayName } = useAuth();
+  const { user, signOut, role, isAdmin, displayName, employeeId } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFractionSettings, setShowFractionSettings] = useState(false);
   const [showEditName, setShowEditName] = useState(false);
@@ -342,7 +342,7 @@ export default function Layout({ children }) {
           </div>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-medium text-slate-700 truncate">{displayName}</div>
-            <div className="text-xs text-slate-400">{ROLE_LABELS[role] || role}</div>
+            <div className="text-xs text-slate-400">{employeeId ? `No.${employeeId}　` : ''}{ROLE_LABELS[role] || role}</div>
           </div>
           <button onClick={() => setShowEditName(true)} title="表示名を変更" className="p-1.5 rounded-lg text-slate-400 hover:text-blue-500 hover:bg-blue-50 text-xs">✏️</button>
           <button onClick={signOut} title="ログアウト" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 text-sm">⏻</button>
@@ -471,7 +471,7 @@ export default function Layout({ children }) {
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-xs font-medium text-slate-700 truncate">{displayName}</div>
-                <div className="text-xs text-slate-400">{ROLE_LABELS[role] || role}</div>
+                <div className="text-xs text-slate-400">{employeeId ? `No.${employeeId}　` : ''}{ROLE_LABELS[role] || role}</div>
               </div>
               <button
                 onClick={() => setShowEditName(true)}

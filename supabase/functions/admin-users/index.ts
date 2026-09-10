@@ -50,6 +50,7 @@ Deno.serve(async (req) => {
       const users = data.users.map(u => ({
         id: u.id,
         email: u.email,
+        employee_id: u.user_metadata?.employee_id ?? '',
         display_name: u.user_metadata?.display_name ?? '',
         role: u.user_metadata?.role ?? 'viewer',
         created_at: u.created_at,
@@ -60,7 +61,7 @@ Deno.serve(async (req) => {
     }
 
     if (method === 'POST') {
-      const { email, password, role: newRole, display_name } = await req.json()
+      const { email, password, role: newRole, display_name, employee_id } = await req.json()
       if (!email || !password) {
         return json({ error: 'メールアドレスとパスワードは必須です' }, 400)
       }
@@ -69,7 +70,7 @@ Deno.serve(async (req) => {
         email,
         password,
         email_confirm: true,
-        user_metadata: { role: newRole ?? 'viewer', display_name: display_name ?? '' },
+        user_metadata: { role: newRole ?? 'viewer', display_name: display_name ?? '', employee_id: employee_id ?? '' },
       })
       if (error) return json({ error: error.message }, 500)
 
