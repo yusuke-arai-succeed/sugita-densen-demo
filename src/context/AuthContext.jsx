@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { getRoleFromUser, ROLES } from '../lib/roles';
 
 const AuthContext = createContext(null);
 
@@ -26,11 +27,15 @@ export function AuthProvider({ children }) {
 
   const signOut = () => supabase.auth.signOut();
 
+  const role = getRoleFromUser(user);
+  const isAdmin = role === ROLES.ADMIN;
+  const isOperator = role === ROLES.OPERATOR || role === ROLES.ADMIN;
+
   if (loading) return null;
   if (!user) return <LoginForm />;
 
   return (
-    <AuthContext.Provider value={{ user, signOut }}>
+    <AuthContext.Provider value={{ user, signOut, role, isAdmin, isOperator }}>
       {children}
     </AuthContext.Provider>
   );

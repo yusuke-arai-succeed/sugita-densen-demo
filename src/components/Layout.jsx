@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
+import { ROLE_LABELS } from '../lib/roles';
 
 // デプロイごとに更新するバージョン情報
 const APP_VERSION = 'v1.4';
@@ -89,11 +90,11 @@ const masterItems = [
 ];
 
 // 全項目（ヘッダータイトル検索用）
-const allNavItems = [...navItems, ...masterItems];
+const allNavItems = [...navItems, ...masterItems, { id: 'settings', label: '設定', icon: '⚙️' }];
 
 export default function Layout({ children }) {
   const { activeApp, setActiveApp, deadlineAlerts, orders, mfgOrders, materialIssuances, currentStock, materialReorderConfig, delayAlerts, techRequests, inventory, fractionRule, setFractionRule } = useApp();
-  const { user, signOut } = useAuth();
+  const { user, signOut, role, isAdmin } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showFractionSettings, setShowFractionSettings] = useState(false);
 
@@ -275,13 +276,25 @@ export default function Layout({ children }) {
           </button>
         ))}
       </nav>
+      {isAdmin && (
+        <button
+          onClick={() => handleNav('settings')}
+          className={`sidebar-item w-full text-left mx-3 ${activeApp === 'settings' ? 'active' : 'text-slate-600'}`}
+        >
+          <span className="text-base">⚙️</span>
+          <span className="flex-1">設定</span>
+        </button>
+      )}
       <div className="px-4 py-4 border-t border-slate-200">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-slate-200 rounded-full flex items-center justify-center text-slate-600 text-sm">細</div>
-          <div>
-            <div className="text-xs font-medium text-slate-700">細野 様</div>
-            <div className="text-xs text-slate-400">管理者</div>
+          <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-700 text-sm font-bold">
+            {user?.email?.[0]?.toUpperCase() ?? '?'}
           </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-700 truncate">{user?.email}</div>
+            <div className="text-xs text-slate-400">{ROLE_LABELS[role] || role}</div>
+          </div>
+          <button onClick={signOut} title="ログアウト" className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 text-sm">⏻</button>
         </div>
       </div>
     </>
@@ -369,6 +382,13 @@ export default function Layout({ children }) {
             collapsed
               ? <CollapsedNavButton key={item.id} item={item} />
               : <NavButton key={item.id} item={item} />
+          )}
+
+          {/* 設定（管理者のみ） */}
+          {isAdmin && (
+            collapsed
+              ? <CollapsedNavButton item={{ id: 'settings', label: '設定', icon: '⚙️' }} />
+              : <NavButton item={{ id: 'settings', label: '設定', icon: '⚙️' }} />
           )}
         </nav>
 

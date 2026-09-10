@@ -1,6 +1,7 @@
 import { AppProvider, useApp } from './context/AppContext';
-import { AuthProvider } from './context/AuthContext';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import Layout from './components/Layout';
+import Settings from './components/Settings';
 import Dashboard from './components/Dashboard';
 import ProductMaster from './components/ProductMaster';
 import QuoteManagement from './components/QuoteManagement';
@@ -21,6 +22,7 @@ import CustomerMaster from './components/CustomerMaster';
 
 function AppContent() {
   const { activeApp } = useApp();
+  const { isAdmin } = useAuth();
 
   const renderApp = () => {
     switch (activeApp) {
@@ -41,6 +43,7 @@ function AppContent() {
       case 'equipment':      return <EquipmentMaster />;
       case 'invoice':         return <InvoiceManagement />;
       case 'customerMaster':  return <CustomerMaster />;
+      case 'settings':       return isAdmin ? <Settings /> : <Dashboard />;
       default:                return <Dashboard />;
     }
   };
